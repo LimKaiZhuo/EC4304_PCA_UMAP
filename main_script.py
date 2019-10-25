@@ -1,33 +1,69 @@
-from own_package.features_labels import read_excel_data, Fl_master, Fl_pca
+from own_package.features_labels import read_excel_data, read_excel_dataloader, Fl_master, Fl_pca
+from own_package.others import create_results_directory
+from own_package.pre_processing import type_transformations
+import openpyxl
+from openpyxl.utils.dataframe import dataframe_to_rows
+import pandas as pd
+from own_package.others import print_array_to_excel
 
 def selector(case):
-    if case == 1:
+    if case == 0:
+        excel_dir = './excel/dataset_blanks.xlsx'
+        type_transformations(excel_dir=excel_dir,
+                             y_selection=['W875RX1','DPCERA3M086SBEA', 'CMRMTSPLx', 'INDPRO',
+                                          'PAYEMS', 'WPSFD49207', 'CPIAUCSL', 'CPIULFSL'],
+                             h_steps=[1,3,6,12,24])
+    elif case == 1:
         # Testing filling out missing observation using iterated EM method
-        excel_dir = './excel/dataset_1.xlsx'
-        features, labels, time_stamp, features_names, labels_names = read_excel_data(excel_dir=excel_dir)
-        fl_master = Fl_master(features, labels, time_stamp, features_names, labels_names)
-        fl_master.iterated_em(features=features, labels=labels, pca_p=15, max_iter=10000, tol=0.1, excel_dir=excel_dir)
+        excel_dir = './excel/dataset_filled.xlsx'
+        features, labels, time_stamp, features_names, labels_names, label_type = read_excel_data(excel_dir=excel_dir)
+        fl_master = Fl_master(x=features, yo=labels, time_stamp=time_stamp,
+                              features_names=features_names, labels_names=labels_names)
+        fl_master.iterated_em(features=features, labels=labels, pca_p=9, max_iter=10000, tol=0.1, excel_dir=excel_dir)
     elif case == 2:
         # Testing pca k selection using IC criteria
-        excel_dir = './excel/dataset_2.xlsx'
-        features, labels, time_stamp, features_names, labels_names = read_excel_data(excel_dir=excel_dir)
-        fl_master = Fl_master(x=features, y=labels, time_stamp=time_stamp,
+        excel_dir = './excel/dataset_filled.xlsx'
+        features, labels, time_stamp, features_names, labels_names, label_type = read_excel_data(excel_dir=excel_dir)
+        fl_master = Fl_master(x=features, yo=labels, time_stamp=time_stamp,
                               features_names=features_names, labels_names=labels_names)
+        (f_tv, f_tt), (yo_tv, yo_t), (y_tv, y_tt),\
+        (ts_tv, ts_tt), (tidx_tv, tidx_tt), (nobs_tv, nobs_tt) = fl_master.percentage_split(0)
+        fl = Fl_pca(val_split=0.2, x=f_tv, yo=yo_tv, y=y_tv,
+                    time_stamp=ts_tv, time_idx=tidx_tv, features_names=features_names, labels_names=labels_names)
+        r, ic_store = fl.pca_k_selection(lower_k=5, upper_k=40)
+        print(ic_store)
+    elif case == 3:
+        excel_dir = './excel/W875RX1_data_loader.xlsx'
+        results_dir = create_results_directory('./results/test')
+        output = read_excel_dataloader(excel_dir=excel_dir)
+        fl_master = Fl_master(x=output[0], features_names=output[1],
+                              yo=output[2], labels_names=output[3],
+                              y=output[4], y_names=output[5],
+                              time_stamp=output[6])
         (f_tv, f_tt), (yo_tv, yo_t), (y_tv, y_tt),\
         (ts_tv, ts_tt), (tidx_tv, tidx_tt), (nobs_tv, nobs_tt) = fl_master.percentage_split(0.2)
         fl = Fl_pca(val_split=0.2, x=f_tv, yo=yo_tv, y=y_tv,
-                    time_stamp=ts_tv, time_idx=tidx_tv, features_names=features_names, labels_names=labels_names)
-        fl.pca_k_selection(lower_k=5, upper_k=fl.N-1)
-    elif case == 3:
-        excel_dir = './excel/dataset_2.xlsx'
-        features, labels, time_stamp, features_names, labels_names = read_excel_data(excel_dir=excel_dir)
-        fl_master = Fl_master(features, labels, time_stamp, features_names, labels_names)
-        (f_tv, f_tt), (yo_tv, yo_t), (l_tv, l_tt),\
-        (ts_tv, ts_tt), (tidx_tv, tidx_tt), (nobs_tv, nobs_tt) = fl_master.percentage_split(0.2)
-        fl = Fl_pca(val_split=0.2, features=f_tv, yo=yo_tv, labels=l_tv,
-                    time_stamp=ts_tv, time_idx=tidx_tv, features_names=features_names, labels_names=labels_names)
-        factors, _ = fl.pca_factor_estimation(f_tv, 10)
-        ff, fy, l = fl.pca_umap_prepare_data_matrix(factors, l_tv, l_tv, 10, 3, 2)
+                    time_stamp=ts_tv, time_idx=tidx_tv,
+                    features_names=fl_master.features_names, labels_names=fl_master.labels_names,
+                    y_names=fl_master.y_names)
+        h_steps = [1,3,6,12,24]
+        wb = openpyxl.Workbook()
+        type = 'PLC'
+        for idx, h in enumerate(h_steps):
+            df = fl.hparam_selection(model='UMAP', type=type, bounds_m=[1,2], bounds_p=[11,12], h=h, h_idx=idx, h_max=max(h_steps), r=9, results_dir=results_dir)
+            wb.create_sheet('{}_h_{}'.format(type, h))
+            sheet_name = wb.sheetnames[-1]
+            ws = wb[sheet_name]
+
+            print_array_to_excel(array=['h = {}'.format(h), 'r = 9'], first_cell=(1, 1), ws=ws, axis=1)
+            rows = dataframe_to_rows(df)
+
+            for r_idx, row in enumerate(rows, 1):
+                for c_idx, value in enumerate(row, 1):
+                    ws.cell(row=r_idx + 1, column=c_idx, value=value)
+
+        wb.save(filename='{}/{}.xlsx'.format(results_dir, type))
+
     pass
 
 selector(3)
