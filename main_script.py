@@ -42,7 +42,7 @@ def selector(case):
                               y=output[4], y_names=output[5],
                               time_stamp=output[6])
         (f_tv, f_tt), (yo_tv, yo_t), (y_tv, y_tt),\
-        (ts_tv, ts_tt), (tidx_tv, tidx_tt), (nobs_tv, nobs_tt) = fl_master.percentage_split(0)
+        (ts_tv, ts_tt), (tidx_tv, tidx_tt), (nobs_tv, nobs_tt) = fl_master.percentage_split(0.2)
         fl = Fl_pca(val_split=0.2, x=f_tv, yo=yo_tv, y=y_tv,
                     time_stamp=ts_tv, time_idx=tidx_tv,
                     features_names=fl_master.features_names, labels_names=fl_master.labels_names,
@@ -57,8 +57,11 @@ def selector(case):
             wb = openpyxl.Workbook()
             if model == 'AR':
                 bounds_m = [1,1]
-                bounds_p = [1,6]
-            elif model == 'PCA' or model == 'UMAP':
+                bounds_p = [1,12]
+            elif model == 'PCA':
+                bounds_m = [1,9]
+                bounds_p = [1,12]
+            elif model == 'UMAP':
                 bounds_m = [1,3]
                 bounds_p = [1,6]
             for idx, h in enumerate(h_steps):
