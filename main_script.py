@@ -33,8 +33,8 @@ def selector(case):
         r, ic_store = fl.pca_k_selection(lower_k=5, upper_k=40)
         print(ic_store)
     elif case == 3:
-        var_name = 'IND'
-        excel_dir = './excel/IND_data_loader.xlsx'
+        var_name = 'W875RX1'
+        excel_dir = './excel/W875RX1_data_loader.xlsx'
         results_dir = create_results_directory('./results/test')
         output = read_excel_dataloader(excel_dir=excel_dir)
         fl_master = Fl_master(x=output[0], features_names=output[1],
@@ -42,25 +42,25 @@ def selector(case):
                               y=output[4], y_names=output[5],
                               time_stamp=output[6])
         (f_tv, f_tt), (yo_tv, yo_t), (y_tv, y_tt),\
-        (ts_tv, ts_tt), (tidx_tv, tidx_tt), (nobs_tv, nobs_tt) = fl_master.percentage_split(0.2)
+        (ts_tv, ts_tt), (tidx_tv, tidx_tt), (nobs_tv, nobs_tt) = fl_master.percentage_split(0)
         fl = Fl_pca(val_split=0.2, x=f_tv, yo=yo_tv, y=y_tv,
                     time_stamp=ts_tv, time_idx=tidx_tv,
                     features_names=fl_master.features_names, labels_names=fl_master.labels_names,
                     y_names=fl_master.y_names)
         h_steps = [1,3,6,12,24]
-        #type_store = ['PLS', 'AIC_BIC', 'PLS', 'AIC_BIC']
-        #model_store = ['AR', 'AR', 'PCA', 'PCA']
-        type_store = ['AIC_BIC']
-        model_store = ['UMAP']
+        type_store = ['PLS', 'AIC_BIC', 'PLS', 'AIC_BIC', 'PLS', 'AIC_BIC']
+        model_store = ['AR', 'AR', 'PCA', 'PCA', 'UMAP', 'UMAP']
+        #type_store = ['AIC_BIC']
+        #model_store = ['UMAP']
         for type, model in zip(type_store, model_store):
             print('{}_{} Experiment'.format(type, model))
             wb = openpyxl.Workbook()
             if model == 'AR':
                 bounds_m = [1,1]
-                bounds_p = [1,12]
+                bounds_p = [1,6]
             elif model == 'PCA' or model == 'UMAP':
-                bounds_m = [1,9]
-                bounds_p = [1,12]
+                bounds_m = [1,3]
+                bounds_p = [1,6]
             for idx, h in enumerate(h_steps):
                 start = time.time()
                 df = fl.hparam_selection(model=model, type=type, bounds_m=bounds_m, bounds_p=bounds_p, h=h, h_idx=idx, h_max=max(h_steps), r=9, results_dir=results_dir)
