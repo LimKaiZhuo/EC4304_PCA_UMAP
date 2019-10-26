@@ -14,6 +14,7 @@ import statsmodels.api as sm
 from own_package.others import print_array_to_excel
 import umap
 
+
 def read_excel_data(excel_dir):
     features = pd.read_excel(excel_dir, sheet_name='features')
     features_names = features.columns.values.tolist()
@@ -277,11 +278,11 @@ class Fl_master:
 
         for idx, (x_1, yo_1, y_1) in enumerate(zip(x_v.tolist(), yo_v.tolist(), y_v.tolist())):
             v = self.prepare_data_vector(f=f_t, yo=yo_t, m=m, p=p)
-            y_1_hat = ols_model.predict(exog=np.concatenate((np.ones((1,1)), v), axis=1))
+            y_1_hat = ols_model.predict(exog=np.concatenate((np.ones((1, 1)), v), axis=1))
             e_1_hat = y_1 - y_1_hat
 
-            y_hat_store.append(y_1_hat)
-            e_hat_store.append(e_1_hat)
+            y_hat_store.append(y_1_hat.item())
+            e_hat_store.append(e_1_hat.item())
 
             x_t = np.concatenate((x_t, np.array(x_1)[None, ...]), axis=0)
             yo_t = np.concatenate((yo_t, np.array(yo_1)[None, ...]), axis=0)
@@ -302,7 +303,7 @@ class Fl_master:
         f_LM, yo_LM, y, _, _ = self.pca_umap_prepare_data_matrix(f, yo, y, h, m, p)
         T = np.shape(f)[0]
         a_max = max(m_max, p_max)
-        if not h == h_max and m == m_max and p == p_max:
+        if h < h_max or m < m_max or p < p_max:
             f_LM = f_LM[-T + h_max + a_max - 1:, :]
             yo_LM = yo_LM[-T + h_max + a_max - 1:, :]
             y = y[-T + h_max + a_max - 1:, :]
@@ -330,7 +331,6 @@ class Fl_master:
         fy = yo[a - 1:T - h, :]
 
         y_idx = self.time_idx[-T + h + a - 1:]
-
 
         if p >= 2:
             for idx in range(2, p + 1):
@@ -366,11 +366,11 @@ class Fl_master:
 
         for idx, (yo_1, y_1) in enumerate(zip(yo_v.tolist(), y_v.tolist())):
             v = self.ar_prepare_data_vector(yo=yo_t, p=p)
-            y_1_hat = ols_model.predict(exog=np.concatenate((np.ones((1,1)), v), axis=1))
+            y_1_hat = ols_model.predict(exog=np.concatenate((np.ones((1, 1)), v), axis=1))
             e_1_hat = y_1 - y_1_hat
 
-            y_hat_store.append(y_1_hat)
-            e_hat_store.append(e_1_hat)
+            y_hat_store.append(y_1_hat.item())
+            e_hat_store.append(e_1_hat.item())
 
             yo_t = np.concatenate((yo_t, np.array(yo_1)[None, ...]), axis=0)
             y_t = np.concatenate((y_t, np.array(y_1)[None, ...]), axis=0)
@@ -383,6 +383,19 @@ class Fl_master:
             ols_model = ols_model.fit()
 
         return y_hat_store, e_hat_store, math.sqrt(np.mean(np.array(e_hat_store) ** 2)), results_t
+
+    def aic_bic_for_ar(self, h, p, r, h_max, p_max, yo, y):
+        yo_LM, y, _ = self.ar_prepare_data_matrix(yo, y, h, p)
+        T = np.shape(yo)[0]
+        a_max = p_max
+        if h < h_max or p < p_max:
+            yo_LM = yo_LM[-T + h_max + a_max - 1:, :]
+            y = y[-T + h_max + a_max - 1:, :]
+            pass
+
+        ols_model = sm.OLS(endog=y, exog=sm.add_constant(yo_LM))
+        ols_model = ols_model.fit()
+        return ols_model.aic, ols_model.bic
 
 
 class Fl_pca(Fl_master):
@@ -431,42 +444,79 @@ class Fl_pca(Fl_master):
         m_max = bounds_m[1]
         p_max = bounds_p[1]
 
-        if model == 'PCA':
-            factor_model = self.pca_factor_estimation
-        elif model =='UMAP':
-            factor_model = self.umap_factor_estimation
+        if model == 'PCA' or model == 'UMAP':
+            if model == 'PCA':
+                factor_model = self.pca_factor_estimation
+            else:
+                factor_model = self.umap_factor_estimation
+
+            if type == 'PLS':
+                for m, p in hparams_store:
+                    y_hat, _, rmse, results_t = self.pls_expanding_window(h=h, m=m, p=p, r=r,
+                                                                          factor_model=factor_model,
+                                                                          x_t=self.x_t, yo_t=self.yo_t,
+                                                                          y_t=self.y_t[:, h_idx][..., None],
+                                                                          x_v=self.x_v, yo_v=self.yo_v,
+                                                                          y_v=self.y_v[:, h_idx][..., None])
+
+                    rmse_store.append(rmse)
+                    aic_t_store.append(results_t.aic)
+                    bic_t_store.append(results_t.bic)
+                    y_hat_store.append(y_hat)
+                df = pd.DataFrame(data=np.concatenate((np.array(hparams_store),
+                                                       np.array(rmse_store)[..., None],
+                                                       np.array(aic_t_store)[..., None],
+                                                       np.array(bic_t_store)[..., None],
+                                                       np.array(y_hat_store)), axis=1),
+                                  columns=['m', 'p', 'Val RMSE', 'AIC_t', 'BIC_t'] + self.y_v[h:, h_idx].flatten().tolist())
+
+
+            elif type == 'AIC_BIC':
+                for m, p in hparams_store:
+                    aic, bic = self.aic_bic_for_pca_umap(h=h, m=m, p=p, r=r, h_max=h_max, m_max=m_max, p_max=p_max,
+                                                         factor_model=factor_model,
+                                                         x=self.x, yo=self.yo, y=self.y)
+                    rmse_store.append(-1)
+                    aic_t_store.append(aic)
+                    bic_t_store.append(bic)
+                df = pd.DataFrame(data=np.concatenate((np.array(hparams_store),
+                                                       np.array(rmse_store)[..., None],
+                                                       np.array(aic_t_store)[..., None],
+                                                       np.array(bic_t_store)[..., None]), axis=1),
+                                  columns=['m', 'p', 'Val RMSE', 'AIC_t', 'BIC_t'])
+
+        elif model == 'AR':
+            if type == 'PLS':
+                for m, p in hparams_store:
+                    y_hat, _, rmse, results_t = self.ar_pls_expanding_window(h=h, p=p, r=r, yo_t=self.yo_t,
+                                                                             y_t=self.y_t[:, h_idx][..., None],
+                                                                             yo_v=self.yo_v,
+                                                                             y_v=self.y_v[:, h_idx][..., None])
+
+                    rmse_store.append(rmse)
+                    aic_t_store.append(results_t.aic)
+                    bic_t_store.append(results_t.bic)
+                    y_hat_store.append(y_hat)
+                df = pd.DataFrame(data=np.concatenate((np.array(hparams_store),
+                                                       np.array(rmse_store)[..., None],
+                                                       np.array(aic_t_store)[..., None],
+                                                       np.array(bic_t_store)[..., None],
+                                                       np.array(y_hat_store)), axis=1),
+                                  columns=['m', 'p', 'Val RMSE', 'AIC_t', 'BIC_t'] + self.y_v[h:, h_idx].flatten().tolist())
+
+
+            elif type == 'AIC_BIC':
+                for m, p in hparams_store:
+                    aic, bic = self.aic_bic_for_ar(h=h, p=p, r=r, h_max=h_max,  p_max=p_max,yo=self.yo, y=self.y)
+                    rmse_store.append(-1)
+                    aic_t_store.append(aic)
+                    bic_t_store.append(bic)
+                df = pd.DataFrame(data=np.concatenate((np.array(hparams_store),
+                                                       np.array(rmse_store)[..., None],
+                                                       np.array(aic_t_store)[..., None],
+                                                       np.array(bic_t_store)[..., None]), axis=1),
+                                  columns=['m', 'p', 'Val RMSE', 'AIC_t', 'BIC_t'])
         else:
             raise KeyError('Factor model selected is not available.')
-
-        if type == 'PLC':
-            for m, p in hparams_store:
-                y_hat, _, rmse, results_t = self.pls_expanding_window(h=h, m=m, p=p, r=r,
-                                                                  factor_model=factor_model,
-                                                                  x_t=self.x_t, yo_t=self.yo_t,
-                                                                  y_t=self.y_t[:, h_idx][..., None],
-                                                                  x_v=self.x_v, yo_v=self.yo_v,
-                                                                  y_v=self.y_v[:, h_idx][..., None])
-
-                rmse_store.append(rmse)
-                aic_t_store.append(results_t.aic)
-                bic_t_store.append(results_t.bic)
-
-
-        elif type == 'AIC_BIC':
-            for m, p in hparams_store:
-                aic, bic = self.aic_bic_for_pca_umap(h=h, m=m, p=p, r=r, h_max=h_max, m_max=m_max, p_max=p_max,
-                                                     factor_model=factor_model,
-                                                     x=self.x, yo=self.yo, y=self.y)
-                rmse_store.append(-1)
-                aic_t_store.append(aic)
-                bic_t_store.append(bic)
-        else:
-            raise KeyError('type is not one of the available types of hyper parameter tuning')
-
-        df = pd.DataFrame(data=np.concatenate((np.array(hparams_store),
-                                               np.array(rmse_store)[..., None],
-                                               np.array(aic_t_store)[..., None],
-                                               np.array(bic_t_store)[..., None]), axis=1),
-                          columns=['m', 'p', 'Val RMSE', 'AIC_t', 'BIC_t'])
 
         return df

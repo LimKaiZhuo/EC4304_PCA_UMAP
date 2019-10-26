@@ -1,7 +1,7 @@
 from own_package.features_labels import read_excel_data, read_excel_dataloader, Fl_master, Fl_pca
 from own_package.others import create_results_directory
 from own_package.pre_processing import type_transformations
-import openpyxl
+import openpyxl, time
 from openpyxl.utils.dataframe import dataframe_to_rows
 import pandas as pd
 from own_package.others import print_array_to_excel
@@ -33,7 +33,8 @@ def selector(case):
         r, ic_store = fl.pca_k_selection(lower_k=5, upper_k=40)
         print(ic_store)
     elif case == 3:
-        excel_dir = './excel/W875RX1_data_loader.xlsx'
+        var_name = 'IND'
+        excel_dir = './excel/IND_data_loader.xlsx'
         results_dir = create_results_directory('./results/test')
         output = read_excel_dataloader(excel_dir=excel_dir)
         fl_master = Fl_master(x=output[0], features_names=output[1],
@@ -47,22 +48,36 @@ def selector(case):
                     features_names=fl_master.features_names, labels_names=fl_master.labels_names,
                     y_names=fl_master.y_names)
         h_steps = [1,3,6,12,24]
-        wb = openpyxl.Workbook()
-        type = 'PLC'
-        for idx, h in enumerate(h_steps):
-            df = fl.hparam_selection(model='UMAP', type=type, bounds_m=[1,2], bounds_p=[11,12], h=h, h_idx=idx, h_max=max(h_steps), r=9, results_dir=results_dir)
-            wb.create_sheet('{}_h_{}'.format(type, h))
-            sheet_name = wb.sheetnames[-1]
-            ws = wb[sheet_name]
+        #type_store = ['PLS', 'AIC_BIC', 'PLS', 'AIC_BIC']
+        #model_store = ['AR', 'AR', 'PCA', 'PCA']
+        type_store = ['AIC_BIC']
+        model_store = ['UMAP']
+        for type, model in zip(type_store, model_store):
+            print('{}_{} Experiment'.format(type, model))
+            wb = openpyxl.Workbook()
+            if model == 'AR':
+                bounds_m = [1,1]
+                bounds_p = [1,12]
+            elif model == 'PCA' or model == 'UMAP':
+                bounds_m = [1,9]
+                bounds_p = [1,12]
+            for idx, h in enumerate(h_steps):
+                start = time.time()
+                df = fl.hparam_selection(model=model, type=type, bounds_m=bounds_m, bounds_p=bounds_p, h=h, h_idx=idx, h_max=max(h_steps), r=9, results_dir=results_dir)
+                wb.create_sheet('{}_h_{}'.format(type, h))
+                sheet_name = wb.sheetnames[-1]
+                ws = wb[sheet_name]
 
-            print_array_to_excel(array=['h = {}'.format(h), 'r = 9'], first_cell=(1, 1), ws=ws, axis=1)
-            rows = dataframe_to_rows(df)
+                print_array_to_excel(array=['h = {}'.format(h), 'r = 9', var_name], first_cell=(1, 1), ws=ws, axis=1)
+                rows = dataframe_to_rows(df)
 
-            for r_idx, row in enumerate(rows, 1):
-                for c_idx, value in enumerate(row, 1):
-                    ws.cell(row=r_idx + 1, column=c_idx, value=value)
+                for r_idx, row in enumerate(rows, 1):
+                    for c_idx, value in enumerate(row, 1):
+                        ws.cell(row=r_idx + 1, column=c_idx, value=value)
+                end = time.time()
+                print('h = {} completed. Time Taken = {}'.format(h, end-start))
 
-        wb.save(filename='{}/{}.xlsx'.format(results_dir, type))
+            wb.save(filename='{}/{}_{}_{}.xlsx'.format(results_dir, var_name, model, type))
 
     pass
 
