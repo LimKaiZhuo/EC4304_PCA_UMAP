@@ -6,7 +6,7 @@ from openpyxl.utils.dataframe import dataframe_to_rows
 import pandas as pd
 from own_package.others import print_array_to_excel
 
-def selector(case):
+def selector(case, excel_dir = None, var_name=None):
     if case == 0:
         excel_dir = './excel/dataset_blanks.xlsx'
         type_transformations(excel_dir=excel_dir,
@@ -33,8 +33,8 @@ def selector(case):
         r, ic_store = fl.pca_k_selection(lower_k=5, upper_k=40)
         print(ic_store)
     elif case == 3:
-        var_name = 'W875RX1'
-        excel_dir = './excel/W875RX1_data_loader.xlsx'
+        var_name = var_name
+        excel_dir = excel_dir
         results_dir = create_results_directory('./results/test')
         output = read_excel_dataloader(excel_dir=excel_dir)
         fl_master = Fl_master(x=output[0], features_names=output[1],
@@ -42,14 +42,14 @@ def selector(case):
                               y=output[4], y_names=output[5],
                               time_stamp=output[6])
         (f_tv, f_tt), (yo_tv, yo_t), (y_tv, y_tt),\
-        (ts_tv, ts_tt), (tidx_tv, tidx_tt), (nobs_tv, nobs_tt) = fl_master.percentage_split(0.2)
+        (ts_tv, ts_tt), (tidx_tv, tidx_tt), (nobs_tv, nobs_tt) = fl_master.percentage_split(0)
         fl = Fl_pca(val_split=0.2, x=f_tv, yo=yo_tv, y=y_tv,
                     time_stamp=ts_tv, time_idx=tidx_tv,
                     features_names=fl_master.features_names, labels_names=fl_master.labels_names,
                     y_names=fl_master.y_names)
         h_steps = [1,3,6,12,24]
-        type_store = ['PLS', 'AIC_BIC', 'PLS', 'AIC_BIC', 'PLS', 'AIC_BIC']
-        model_store = ['AR', 'AR', 'PCA', 'PCA', 'UMAP', 'UMAP']
+        type_store = ['PLS','PLS',  'PLS']
+        model_store = ['AR',  'PCA',  'UMAP']
         #type_store = ['AIC_BIC']
         #model_store = ['UMAP']
         for type, model in zip(type_store, model_store):
@@ -84,4 +84,7 @@ def selector(case):
 
     pass
 
-selector(3)
+selector(3, excel_dir='./excel/PAY_data_loader.xlsx', var_name='PAY')
+selector(3, excel_dir='./excel/PAY_data_loader.xlsx', var_name='PAY')
+selector(3, excel_dir='./excel/PAY_data_loader.xlsx', var_name='PAY')
+selector(3, excel_dir='./excel/PAY_data_loader.xlsx', var_name='PAY')
