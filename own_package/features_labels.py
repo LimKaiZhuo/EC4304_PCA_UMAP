@@ -432,10 +432,24 @@ class Fl_pca(Fl_master):
 
         return r, ic_store
 
-    def hparam_selection(self, model, type, bounds_m, bounds_p, h, h_idx, h_max, r, results_dir):
-        m_store = list(range(bounds_m[0], bounds_m[1] + 1))
-        p_store = list(range(bounds_p[0], bounds_p[1] + 1))
-        hparams_store = list(itertools.product(m_store, p_store))
+    def hparam_selection(self, model, type, bounds_m, bounds_p, h, h_idx, h_max, r, results_dir, extension=False):
+        if extension:
+            m_init = list(range(bounds_m[0], bounds_m[1] + 1))
+            p_init = list(range(bounds_p[0], bounds_p[1] + 1))
+
+            h_param_init = list(itertools.product(m_init, p_init))
+
+            m_cancel = list(range(1, 3 + 1))
+            p_cancel = list(range(1, 6 + 1))
+
+            h_param_cancel = list(itertools.product(m_cancel, p_cancel))
+
+            hparams_store = [x for x in h_param_init if x not in h_param_cancel]
+        else:
+            m_store = list(range(bounds_m[0], bounds_m[1] + 1))
+            p_store = list(range(bounds_p[0], bounds_p[1] + 1))
+            hparams_store = list(itertools.product(m_store, p_store))
+
         rmse_store = []
         aic_t_store = []
         bic_t_store = []
