@@ -137,5 +137,11 @@ def selector(case, excel_dir = None, var_name=None):
 
     pass
 
-selector(3, excel_dir='./excel/W875RX1_data_loader.xlsx', var_name='W875RX1')
-selector(4, excel_dir='./excel/W875RX1_data_loader.xlsx', var_name='W875RX1')
+selector(3, excel_dir='./excel/WPSFD49207_data_loader.xlsx', var_name='W875RX1')
+selector(4, excel_dir='./excel/WPSFD49207_data_loader.xlsx', var_name='W875RX1')
+
+selector(3, excel_dir='./excel/IND_data_loader.xlsx', var_name='W875RX1')
+selector(4, excel_dir='./excel/IND_data_loader.xlsx', var_name='W875RX1')
+
+selector(3, excel_dir='./excel/PAY_data_loader.xlsx', var_name='W875RX1')
+selector(4, excel_dir='./excel/PAY_data_loader.xlsx', var_name='W875RX1')
