@@ -24,6 +24,10 @@ class Postdata:
         # First 3 lines if a list of dataframes. Each df is one h step ahead, for h=1,3,6,12,24
         # 4th line is list of 1D ndarray for y values
         # 5th line is list of 2D ndarray for (models, y hat values)
+        # self.testset_XXX_y is the list of  1d ndarray for the XXX model (e.g. PCA) actual y values
+        # self.testset_XXX_y_hat is the list of  2d ndarray for the XXX model, size = (no. of models, no. of y values)
+        # self.testset_XXX_AWA_y_hat is the list of 1d ndarray for the XXX model forecasted y values combined with AWA
+        # self.testset_XXX_BWA_y_hat is the list of 1d ndarray for the XXX model forecasted y values combined with BWA
         self.AR_AIC_BIC = read_excel_to_df('{}/{}_AR_AIC_BIC.xlsx'.format(results_dir, var_name))
         self.AR_PLS = read_excel_to_df('{}/{}_AR_PLS.xlsx'.format(results_dir, var_name))
         self.testset_AR_PLS = read_excel_to_df('{}/testset_{}_AR_PLS.xlsx'.format(results_dir, var_name))
