@@ -131,8 +131,17 @@ class Postdata:
         aic_bic_store = [self.AR_AIC_BIC, self.PCA_AIC_BIC, self.UMAP_AIC_BIC]
         testset_y_store = [self.testset_AR_y, self.testset_PCA_y, self.testset_UMAP_y]
         testset_y_hat_store = [self.testset_AR_y_hat, self.testset_PCA_y_hat, self.testset_UMAP_y_hat]
+        self.testset_AR_AWA_y_hat = []
+        self.testset_AR_BWA_y_hat = []
+        self.testset_PCA_AWA_y_hat = []
+        self.testset_PCA_BWA_y_hat = []
+        self.testset_UMAP_AWA_y_hat = []
+        self.testset_UMAP_BWA_y_hat = []
 
-        for skip_idx , (aic_bic, testset_y, testset_y_hat) in enumerate(zip(aic_bic_store, testset_y_store, testset_y_hat_store)):
+        for skip_idx ,(aic_bic, testset_y, testset_y_hat, awa_y_hat, bwa_y_hat)\
+                in enumerate(zip(aic_bic_store, testset_y_store, testset_y_hat_store,
+                                 [self.testset_AR_AWA_y_hat, self.testset_PCA_AWA_y_hat, self.testset_UMAP_AWA_y_hat],
+                                 [self.testset_AR_BWA_y_hat, self.testset_PCA_BWA_y_hat, self.testset_UMAP_BWA_y_hat])):
             type = 'AIC_t'
             t_idx = 4 + 7 * skip_idx
             for idx, (ic, y, y_hat, rm) in enumerate(zip(aic_bic, testset_y, testset_y_hat, self.rm_store)):
@@ -142,6 +151,7 @@ class Postdata:
                 weights = np.exp(-ic_values/2)
                 weights = weights / np.sum(weights)
                 y_combi_hat = np.sum(y_hat * weights[:, None], axis=0)
+                awa_y_hat.append(y_combi_hat)
                 rmse_combi = math.sqrt(np.mean(np.array(y-y_combi_hat) ** 2))
                 rm[t_idx] = rmse_combi / self.benchmark_rmse[idx]
 
@@ -154,6 +164,7 @@ class Postdata:
                 weights = np.exp(-ic_values/2)
                 weights = weights / np.sum(weights)
                 y_combi_hat = np.sum(y_hat * weights[:, None], axis=0)
+                bwa_y_hat.append(y_combi_hat)
                 rmse_combi = math.sqrt(np.mean(np.array(y-y_combi_hat) ** 2))
                 rm[t_idx] = rmse_combi / self.benchmark_rmse[idx]
 
