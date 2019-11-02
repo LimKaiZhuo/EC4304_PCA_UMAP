@@ -1,6 +1,9 @@
 import numpy as np
 import pandas as pd
 import math
+import cvxpy as cp
+import openpyxl
+from openpyxl.utils.dataframe import dataframe_to_rows
 
 
 def read_excel_to_df(excel_dir):
@@ -19,11 +22,63 @@ def read_excel_to_df(excel_dir):
     return df_store
 
 
+def compile_pm_rm_excel(excel_dir_store):
+    master_pm = [[] for x in range(5)]
+    master_rm = [[] for x in range(5)]
+    for excel_dir in excel_dir_store:
+        xls = pd.ExcelFile(excel_dir)
+        sheet_names = xls.sheet_names[1:]
+        for sheet, pm_store, rm_store in zip(sheet_names, master_pm, master_rm):
+            df = pd.read_excel(excel_dir, sheet_name=sheet).values
+            pm_store.append(df[0:9,:])
+            rm_store.append(df[10:,0][..., None])
+
+
+    for idx, pm_h in enumerate(master_pm):
+        pm = pm_h[0]
+        for pm_hh in pm_h[1:]:
+            pm = np.concatenate((pm, pm_hh), axis=1)
+        master_pm[idx] = pm
+
+    for idx, pm_h in enumerate(master_rm):
+        rm = pm_h[0]
+        for pm_hh in pm_h[1:]:
+            rm = np.concatenate((rm, pm_hh), axis=1)
+        master_rm[idx] = rm
+
+    wb = openpyxl.Workbook()
+    for idx, (pm, rm) in enumerate(zip(master_pm, master_rm)):
+
+        pm_name = 'pm_h{}'.format([1,3,6,12,24][idx])
+        rm_name = 'rm_h{}'.format([1, 3, 6, 12, 24][idx])
+        wb.create_sheet(pm_name)
+        wb.create_sheet(rm_name)
+
+        ws = wb[pm_name]
+        pm_df = pd.DataFrame(data=pm, columns=['m', 'p']*len(excel_dir_store))
+        rows = dataframe_to_rows(pm_df, index=False)
+        for r_idx, row in enumerate(rows, 1):
+            for c_idx, value in enumerate(row, 1):
+                ws.cell(row=r_idx + 1, column=c_idx, value=value)
+
+        ws = wb[rm_name]
+        rm_df = pd.DataFrame(data=rm, columns=['Relative RMSE']*len(excel_dir_store))
+        rows = dataframe_to_rows(rm_df, index=False)
+        for r_idx, row in enumerate(rows, 1):
+            for c_idx, value in enumerate(row, 1):
+                ws.cell(row=r_idx + 1 , column=c_idx, value=value)
+
+    wb.save('./results/master_pm_rd.xlsx')
+
+    pass
+
 class Postdata:
     def __init__(self, results_dir, var_name):
+        self.results_dir = results_dir
         # First 3 lines if a list of dataframes. Each df is one h step ahead, for h=1,3,6,12,24
         # 4th line is list of 1D ndarray for y values
         # 5th line is list of 2D ndarray for (models, y hat values)
+
         # self.testset_XXX_y is the list of  1d ndarray for the XXX model (e.g. PCA) actual y values
         # self.testset_XXX_y_hat is the list of  2d ndarray for the XXX model, size = (no. of models, no. of y values)
         # self.testset_XXX_AWA_y_hat is the list of 1d ndarray for the XXX model forecasted y values combined with AWA
@@ -48,7 +103,7 @@ class Postdata:
 
         self.num_h = len(self.AR_AIC_BIC)
         self.pm_store = [np.zeros((9, 2)) for x in range(self.num_h)]
-        self.rm_store = [np.zeros((25)) for x in range(self.num_h)]
+        self.rm_store = [np.zeros((23)) for x in range(self.num_h)]
         self.benchmark_rmse = []
 
         # Iterate through each h step ahead values for all AR. h = 1,3,6,12,24
@@ -126,56 +181,162 @@ class Postdata:
 
         pass
 
-    def awa_bwa(self):
+    def combination(self):
         """
 
         :param type: Either 'AIC_t' or 'BIC_t' for AWA and BWA respectively
         :return:
         """
         aic_bic_store = [self.AR_AIC_BIC, self.PCA_AIC_BIC, self.UMAP_AIC_BIC]
+        pls_store = [self.AR_PLS, self.PCA_PLS, self.UMAP_PLS]
         testset_y_store = [self.testset_AR_y, self.testset_PCA_y, self.testset_UMAP_y]
         testset_y_hat_store = [self.testset_AR_y_hat, self.testset_PCA_y_hat, self.testset_UMAP_y_hat]
         self.testset_AR_AWA_y_hat = []
         self.testset_AR_BWA_y_hat = []
+        self.testset_AR_AVG_y_hat = []
+        self.testset_AR_GR_y_hat = []
         self.testset_PCA_AWA_y_hat = []
         self.testset_PCA_BWA_y_hat = []
+        self.testset_PCA_AVG_y_hat = []
+        self.testset_PCA_GR_y_hat = []
         self.testset_UMAP_AWA_y_hat = []
         self.testset_UMAP_BWA_y_hat = []
+        self.testset_UMAP_AVG_y_hat = []
+        self.testset_UMAP_GR_y_hat = []
+        self.testset_PU_AVG_y_hat = []
+        self.testset_PU_GR_y_hat = []
 
-        for skip_idx ,(aic_bic, testset_y, testset_y_hat, awa_y_hat, bwa_y_hat)\
-                in enumerate(zip(aic_bic_store, testset_y_store, testset_y_hat_store,
+        for skip_idx, (aic_bic_all_h, pls_all_h, testset_y, testset_y_hat, awa_y_hat, bwa_y_hat, avg_y_hat, gr_y_hat) \
+                in enumerate(zip(aic_bic_store, pls_store, testset_y_store, testset_y_hat_store,
                                  [self.testset_AR_AWA_y_hat, self.testset_PCA_AWA_y_hat, self.testset_UMAP_AWA_y_hat],
-                                 [self.testset_AR_BWA_y_hat, self.testset_PCA_BWA_y_hat, self.testset_UMAP_BWA_y_hat])):
-            type = 'AIC_t'
-            t_idx = 4 + 7 * skip_idx
-            for idx, (ic, y, y_hat, rm) in enumerate(zip(aic_bic, testset_y, testset_y_hat, self.rm_store)):
+                                 [self.testset_AR_BWA_y_hat, self.testset_PCA_BWA_y_hat, self.testset_UMAP_BWA_y_hat],
+                                 [self.testset_AR_AVG_y_hat, self.testset_PCA_AVG_y_hat, self.testset_UMAP_AVG_y_hat],
+                                 [self.testset_AR_GR_y_hat, self.testset_PCA_GR_y_hat, self.testset_UMAP_GR_y_hat])):
+
+            for idx, (ic, pls, y, y_hat, rm) in enumerate(
+                    zip(aic_bic_all_h, pls_all_h, testset_y, testset_y_hat, self.rm_store)):
+                # Simple average AVG
+                t_idx = 3 + 7 * skip_idx
+                y_combi_hat = np.mean(y_hat, axis=0)
+                avg_y_hat.append(y_combi_hat)
+                rmse_combi = math.sqrt(np.mean(np.array(y - y_combi_hat) ** 2))
+                rm[t_idx] = rmse_combi / self.benchmark_rmse[idx]
+
+                # AWA
+                type = 'AIC_t'
+                t_idx = 4 + 7 * skip_idx
                 ic_values = ic[type].values
                 min_ic = np.min(ic_values)
                 ic_values += -min_ic
-                weights = np.exp(-ic_values/2)
+                weights = np.exp(-ic_values / 2)
                 weights = weights / np.sum(weights)
                 y_combi_hat = np.sum(y_hat * weights[:, None], axis=0)
                 awa_y_hat.append(y_combi_hat)
-                rmse_combi = math.sqrt(np.mean(np.array(y-y_combi_hat) ** 2))
+                rmse_combi = math.sqrt(np.mean(np.array(y - y_combi_hat) ** 2))
                 rm[t_idx] = rmse_combi / self.benchmark_rmse[idx]
 
-            type = 'BIC_t'
-            t_idx = 5 + 7 * skip_idx
-            for idx, (ic, y, y_hat, rm) in enumerate(zip(aic_bic, testset_y, testset_y_hat, self.rm_store)):
+                # BWA
+                type = 'BIC_t'
+                t_idx = 5 + 7 * skip_idx
                 ic_values = ic[type].values
                 min_ic = np.min(ic_values)
                 ic_values += -min_ic
-                weights = np.exp(-ic_values/2)
+                weights = np.exp(-ic_values / 2)
                 weights = weights / np.sum(weights)
                 y_combi_hat = np.sum(y_hat * weights[:, None], axis=0)
                 bwa_y_hat.append(y_combi_hat)
-                rmse_combi = math.sqrt(np.mean(np.array(y-y_combi_hat) ** 2))
+                rmse_combi = math.sqrt(np.mean(np.array(y - y_combi_hat) ** 2))
                 rm[t_idx] = rmse_combi / self.benchmark_rmse[idx]
+
+                # GR
+                t_idx = 6 + 7 * skip_idx
+                y_pls = np.array(pls.columns.tolist()[5:])
+                y_hat_pls = pls.iloc[:, 5:].values
+                m = np.shape(y_hat_pls)[0] + 1  # number of models + 1 constant term
+                n = np.shape(y_hat_pls)[1]  # number of timesteps
+                beta = cp.Variable(shape=(m, 1))
+
+                pc_1 = np.ones((1, m - 1)) @ beta[1:, 0] == 1
+                pc_2 = beta >= 0
+                constraints = [pc_1, pc_2]
+
+                X = np.concatenate((np.ones((n, 1)), y_hat_pls.T), axis=1)
+
+                z = np.ones((1, n)) @ (y_pls[:, None] - X @ beta) ** 2
+                objective = cp.Minimize(z)
+                prob = cp.Problem(objective, constraints)
+
+                prob.solve(solver='GUROBI')
+                beta_hat = beta.value
+                y_combi_hat = np.sum(y_hat * beta_hat[1:, 0][:, None] + beta_hat[0, 0], axis=0)
+                gr_y_hat.append(y_combi_hat)
+                rmse_combi = math.sqrt(np.mean(np.array(y - y_combi_hat) ** 2))
+                rm[t_idx] = rmse_combi / self.benchmark_rmse[idx]
+
+        # PCA+UMAP
+        for idx, (pca_pls, umap_pls, y, pca_y_hat, umap_y_hat, rm) in enumerate(
+                zip(self.PCA_PLS, self.UMAP_PLS, self.testset_PCA_y, self.testset_PCA_y_hat, self.testset_UMAP_y_hat,
+                    self.rm_store)):
+            # AVG
+            y_pls = np.array(pca_pls.columns.tolist()[5:])
+            pca_y_hat_pls = pca_pls.iloc[:, 5:].values
+            umap_y_hat_pls = umap_pls.iloc[:, 5:].values
+
+            y_combi_hat = np.mean(np.concatenate((pca_y_hat, umap_y_hat), axis=0), axis=0)
+            self.testset_PU_AVG_y_hat.append(y_combi_hat)
+            rmse_combi = math.sqrt(np.mean(np.array(y - y_combi_hat) ** 2))
+            rm[21] = rmse_combi / self.benchmark_rmse[idx]
+
+            # GR
+            y_hat_pls = np.concatenate((pca_y_hat_pls, umap_y_hat_pls), axis=0)
+            m = np.shape(y_hat_pls)[0] + 1  # number of models + 1 constant term
+            n = np.shape(y_hat_pls)[1]  # number of timesteps
+            beta = cp.Variable(shape=(m, 1))
+
+            pc_1 = np.ones((1, m - 1)) @ beta[1:, 0] == 1
+            pc_2 = beta >= 0
+            constraints = [pc_1, pc_2]
+
+            X = np.concatenate((np.ones((n, 1)), y_hat_pls.T), axis=1)
+
+            z = np.ones((1, n)) @ (y_pls[:, None] - X @ beta) ** 2
+            objective = cp.Minimize(z)
+            prob = cp.Problem(objective, constraints)
+
+            prob.solve(solver='GUROBI')
+            beta_hat = beta.value
+
+            y_hat = np.concatenate((pca_y_hat, umap_y_hat), axis=0)
+            y_combi_hat = np.sum(y_hat * beta_hat[1:, 0][:, None] + beta_hat[0, 0], axis=0)
+            self.testset_PU_GR_y_hat.append(y_combi_hat)
+            rmse_combi = math.sqrt(np.mean(np.array(y - y_combi_hat) ** 2))
+            rm[22] = rmse_combi / self.benchmark_rmse[idx]
+
+        # Printing to excel
+        wb = openpyxl.Workbook()
+        for idx in range(len(self.pm_store)):
+            wb.create_sheet('h = {}'.format([1,3,6,12,24][idx]))
+        sheet_names = wb.sheetnames
+
+        for sheet, pm, rm in zip(sheet_names[1:], self.pm_store, self.rm_store):
+            ws = wb[sheet]
+
+            pm_df = pd.DataFrame(data=pm, columns=['m', 'p'])
+            rows = dataframe_to_rows(pm_df, index=False)
+            for r_idx, row in enumerate(rows, 1):
+                for c_idx, value in enumerate(row, 1):
+                    ws.cell(row=r_idx + 1, column=c_idx, value=value)
+
+            skip = len(pm_df.index) + 1
+            rm_df = pd.DataFrame(data=rm, columns=['Relative RMSE'])
+            rows = dataframe_to_rows(rm_df, index=False)
+            for r_idx, row in enumerate(rows, 1):
+                for c_idx, value in enumerate(row, 1):
+                    ws.cell(row=r_idx + 1 + skip, column=c_idx, value=value)
+
+
+
+        wb.save('{}/pm_rm_results.xlsx'.format(self.results_dir))
 
 
         pass
-
-
-
-
-

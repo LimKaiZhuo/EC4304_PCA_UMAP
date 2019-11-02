@@ -68,7 +68,7 @@ def selector(case, excel_dir = None, var_name=None):
                 start = time.time()
                 df = fl.hparam_selection(model=model, type=type, bounds_m=bounds_m, bounds_p=bounds_p,
                                          h=h, h_idx=idx, h_max=max(h_steps), r=9, results_dir=results_dir,
-                                         extension=True)
+                                         extension=False)
                 wb.create_sheet('{}_h_{}'.format(type, h))
                 sheet_name = wb.sheetnames[-1]
                 ws = wb[sheet_name]
@@ -99,7 +99,7 @@ def selector(case, excel_dir = None, var_name=None):
                     features_names=fl_master.features_names, labels_names=fl_master.labels_names,
                     y_names=fl_master.y_names)
         h_steps = [1,3,6,12,24]
-        type_store = ['PLS']
+        type_store = ['AIC_BIC']
         model_store = ['UMAP']
         #type_store = ['AIC_BIC']
         #model_store = ['UMAP']
@@ -119,7 +119,7 @@ def selector(case, excel_dir = None, var_name=None):
                 start = time.time()
                 df = fl.hparam_selection(model=model, type=type, bounds_m=bounds_m, bounds_p=bounds_p, h=h, h_idx=idx,
                                          h_max=max(h_steps), r=9, results_dir=results_dir,
-                                         extension=True)
+                                         extension=False)
                 wb.create_sheet('{}_h_{}'.format(type, h))
                 sheet_name = wb.sheetnames[-1]
                 ws = wb[sheet_name]
@@ -137,11 +137,14 @@ def selector(case, excel_dir = None, var_name=None):
 
     pass
 
-selector(3, excel_dir='./excel/WPSFD49207_data_loader.xlsx', var_name='W875RX1')
-selector(4, excel_dir='./excel/WPSFD49207_data_loader.xlsx', var_name='W875RX1')
+#selector(3, excel_dir='./excel/W875RX1_data_loader.xlsx', var_name='W875RX1')
+selector(4, excel_dir='./excel/W875RX1_data_loader.xlsx', var_name='W875RX1')
 
-selector(3, excel_dir='./excel/IND_data_loader.xlsx', var_name='W875RX1')
-selector(4, excel_dir='./excel/IND_data_loader.xlsx', var_name='W875RX1')
+#selector(3, excel_dir='./excel/WPSFD49207_data_loader.xlsx', var_name='WPSFD49207')
+selector(4, excel_dir='./excel/WPSFD49207_data_loader.xlsx', var_name='WPSFD49207')
 
-selector(3, excel_dir='./excel/PAY_data_loader.xlsx', var_name='W875RX1')
-selector(4, excel_dir='./excel/PAY_data_loader.xlsx', var_name='W875RX1')
+#selector(3, excel_dir='./excel/IND_data_loader.xlsx', var_name='IND')
+selector(4, excel_dir='./excel/IND_data_loader.xlsx', var_name='IND')
+
+#selector(3, excel_dir='./excel/PAY_data_loader.xlsx', var_name='PAY')
+selector(4, excel_dir='./excel/PAY_data_loader.xlsx', var_name='PAY')
