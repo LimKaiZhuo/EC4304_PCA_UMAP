@@ -4,6 +4,8 @@ import math
 import cvxpy as cp
 import openpyxl
 from openpyxl.utils.dataframe import dataframe_to_rows
+from own_package.dm_test import dm_test
+
 
 
 def read_excel_to_df(excel_dir):
@@ -105,39 +107,64 @@ class Postdata:
         self.pm_store = [np.zeros((9, 2)) for x in range(self.num_h)]
         self.rm_store = [np.zeros((23)) for x in range(self.num_h)]
         self.benchmark_rmse = []
-
+        self.benchmarky = []
+        i = 0
         # Iterate through each h step ahead values for all AR. h = 1,3,6,12,24
-        for idx, (aic, pls, test, pm, rm) in enumerate(
-                zip(self.AR_AIC_BIC, self.AR_PLS, self.testset_AR_PLS, self.pm_store, self.rm_store)):
+        for idx, (aic, pls, test, pm, rm, yhat, y) in enumerate(
+                zip(self.AR_AIC_BIC, self.AR_PLS, self.testset_AR_PLS, self.pm_store, self.rm_store, self.testset_AR_y_hat, self.testset_AR_y)):
+            self.benchmark_forecasted_y_BIC = []
             min_BIC_idx = np.argmin(aic['BIC_t'])
             pm[1, 1] = aic['p'][min_BIC_idx]
             rm[1] = 1
             rmse_idx = test.index[test['p'] == pm[1, 1]].tolist()[0]
             self.benchmark_rmse.append(test['Val RMSE'][rmse_idx])
+            self.benchmarky.append(yhat[rmse_idx])
 
             min_AIC_idx = np.argmin(aic['AIC_t'])
             pm[0, 1] = aic['p'][min_AIC_idx]
-            rmse_idx = test.index[test['p'] == pm[0, 1]].tolist()[0]
-            rmse = test['Val RMSE'][rmse_idx]
+            rmse_idx2 = test.index[test['p'] == pm[0, 1]].tolist()[0]
+            rmse = test['Val RMSE'][rmse_idx2]
             rm[0] = rmse / self.benchmark_rmse[-1]
+            if rmse_idx != rmse_idx2:
+                forecastedy = yhat[rmse_idx2]
+                dm_r = dm_test(y, self.benchmarky[i], forecastedy, h=1, crit="MSE")
+                pvalue = dm_r[1]
+                if pvalue <= 0.05:
+                    rm[0] = rm[0] + 500
 
             min_idx = np.argmin(pls['Val RMSE'])
             pm[2, 1] = pls['p'][min_idx]
-            rmse_idx = test.index[test['p'] == pm[2, 1]].tolist()[0]
-            rmse = test['Val RMSE'][rmse_idx]
+            rmse_idx2 = test.index[test['p'] == pm[2, 1]].tolist()[0]
+            rmse = test['Val RMSE'][rmse_idx2]
             rm[2] = rmse / self.benchmark_rmse[-1]
+            if rmse_idx != rmse_idx2:
+                forecastedy = yhat[rmse_idx2]
+                dm_r = dm_test(y, self.benchmarky[i], forecastedy, h=1, crit="MSE")
+                pvalue = dm_r[1]
+                if pvalue <= 0.05:
+                    rm[2] = rm[2] + 500
 
+            i = i + 1
+
+        i = 0
         # Iterate through each h step ahead values for all PCA. h = 1,3,6,12,24
         skip = 3
         skip2 = 7
-        for idx, (aic, pls, test, pm, rm) in enumerate(
-                zip(self.PCA_AIC_BIC, self.PCA_PLS, self.testset_PCA_PLS, self.pm_store, self.rm_store)):
+        for idx, (aic, pls, test, pm, rm, yhat, y) in enumerate(
+                zip(self.PCA_AIC_BIC, self.PCA_PLS, self.testset_PCA_PLS, self.pm_store, self.rm_store, self.testset_PCA_y_hat, self.testset_PCA_y)):
             min_BIC_idx = np.argmin(aic['BIC_t'])
             pm[1 + skip, 0] = aic['m'][min_BIC_idx]
             pm[1 + skip, 1] = aic['p'][min_BIC_idx]
             rmse_idx = test.index[(test['m'] == pm[1 + skip, 0]) & (test['p'] == pm[1 + skip, 1])].tolist()[0]
             rmse = test['Val RMSE'][rmse_idx]
             rm[1 + skip2] = rmse / self.benchmark_rmse[idx]
+            forecastedy = yhat[rmse_idx]
+            dm_r = dm_test(y, self.benchmarky[i], forecastedy, h=1, crit="MSE")
+            pvalue = dm_r[1]
+            if pvalue <= 0.05:
+                rm[1 + skip2] = rm[1 + skip2] + 500
+
+
 
             min_AIC_idx = np.argmin(aic['AIC_t'])
             pm[0 + skip, 0] = aic['m'][min_AIC_idx]
@@ -145,6 +172,11 @@ class Postdata:
             rmse_idx = test.index[(test['m'] == pm[0 + skip, 0]) & (test['p'] == pm[0 + skip, 1])].tolist()[0]
             rmse = test['Val RMSE'][rmse_idx]
             rm[0 + skip2] = rmse / self.benchmark_rmse[idx]
+            forecastedy = yhat[rmse_idx]
+            dm_r = dm_test(y, self.benchmarky[i], forecastedy, h=1, crit="MSE")
+            pvalue = dm_r[1]
+            if pvalue <= 0.05:
+                rm[0 + skip2] = rm[0 + skip2] + 500
 
             min_idx = np.argmin(pls['Val RMSE'])
             pm[2 + skip, 0] = pls['m'][min_idx]
@@ -152,18 +184,31 @@ class Postdata:
             rmse_idx = test.index[(test['m'] == pm[2 + skip, 0]) & (test['p'] == pm[2 + skip, 1])].tolist()[0]
             rmse = test['Val RMSE'][rmse_idx]
             rm[2 + skip2] = rmse / self.benchmark_rmse[idx]
+            forecastedy = yhat[rmse_idx]
+            dm_r = dm_test(y, self.benchmarky[i], forecastedy, h=1, crit="MSE")
+            pvalue = dm_r[1]
+            if pvalue <= 0.05:
+                rm[2 + skip2] = rm[2 + skip2] + 500
 
+            i = i + 1
+
+        i = 0
         # Iterate through each h step ahead values for all UMAP. h = 1,3,6,12,24
         skip = 3 * 2
         skip2 = 7 * 2
-        for idx, (aic, pls, test, pm, rm) in enumerate(
-                zip(self.UMAP_AIC_BIC, self.UMAP_PLS, self.testset_UMAP_PLS, self.pm_store, self.rm_store)):
+        for idx, (aic, pls, test, pm, rm, yhat, y) in enumerate(
+                zip(self.UMAP_AIC_BIC, self.UMAP_PLS, self.testset_UMAP_PLS, self.pm_store, self.rm_store, self.testset_UMAP_y_hat, self.testset_UMAP_y)):
             min_BIC_idx = np.argmin(aic['BIC_t'])
             pm[1 + skip, 0] = aic['m'][min_BIC_idx]
             pm[1 + skip, 1] = aic['p'][min_BIC_idx]
             rmse_idx = test.index[(test['m'] == pm[1 + skip, 0]) & (test['p'] == pm[1 + skip, 1])].tolist()[0]
             rmse = test['Val RMSE'][rmse_idx]
             rm[1 + skip2] = rmse / self.benchmark_rmse[idx]
+            forecastedy = yhat[rmse_idx]
+            dm_r = dm_test(y, self.benchmarky[i], forecastedy, h=1, crit="MSE")
+            pvalue = dm_r[1]
+            if pvalue <= 0.05:
+                rm[1 + skip2] = rm[1 + skip2] + 500
 
             min_AIC_idx = np.argmin(aic['AIC_t'])
             pm[0 + skip, 0] = aic['m'][min_AIC_idx]
@@ -171,6 +216,11 @@ class Postdata:
             rmse_idx = test.index[(test['m'] == pm[0 + skip, 0]) & (test['p'] == pm[0 + skip, 1])].tolist()[0]
             rmse = test['Val RMSE'][rmse_idx]
             rm[0 + skip2] = rmse / self.benchmark_rmse[idx]
+            forecastedy = yhat[rmse_idx]
+            dm_r = dm_test(y, self.benchmarky[i], forecastedy, h=1, crit="MSE")
+            pvalue = dm_r[1]
+            if pvalue <= 0.05:
+                rm[0 + skip2] = rm[0 + skip2] + 500
 
             min_idx = np.argmin(pls['Val RMSE'])
             pm[2 + skip, 0] = pls['m'][min_idx]
@@ -178,6 +228,13 @@ class Postdata:
             rmse_idx = test.index[(test['m'] == pm[2 + skip, 0]) & (test['p'] == pm[2 + skip, 1])].tolist()[0]
             rmse = test['Val RMSE'][rmse_idx]
             rm[2 + skip2] = rmse / self.benchmark_rmse[idx]
+            forecastedy = yhat[rmse_idx]
+            dm_r = dm_test(y, self.benchmarky[i], forecastedy, h=1, crit="MSE")
+            pvalue = dm_r[1]
+            if pvalue <= 0.05:
+                rm[2 + skip2] = rm[2 + skip2] + 500
+
+            i = i + 1
 
         pass
 
@@ -212,7 +269,7 @@ class Postdata:
                                  [self.testset_AR_BWA_y_hat, self.testset_PCA_BWA_y_hat, self.testset_UMAP_BWA_y_hat],
                                  [self.testset_AR_AVG_y_hat, self.testset_PCA_AVG_y_hat, self.testset_UMAP_AVG_y_hat],
                                  [self.testset_AR_GR_y_hat, self.testset_PCA_GR_y_hat, self.testset_UMAP_GR_y_hat])):
-
+            i = 0
             for idx, (ic, pls, y, y_hat, rm) in enumerate(
                     zip(aic_bic_all_h, pls_all_h, testset_y, testset_y_hat, self.rm_store)):
                 # Simple average AVG
@@ -221,6 +278,10 @@ class Postdata:
                 avg_y_hat.append(y_combi_hat)
                 rmse_combi = math.sqrt(np.mean(np.array(y - y_combi_hat) ** 2))
                 rm[t_idx] = rmse_combi / self.benchmark_rmse[idx]
+                dm_r = dm_test(y, self.benchmarky[i], y_combi_hat, h=1, crit="MSE")
+                pvalue = dm_r[1]
+                if pvalue <= 0.05:
+                    rm[t_idx] = rm[t_idx] + 500
 
                 # AWA
                 type = 'AIC_t'
@@ -234,6 +295,10 @@ class Postdata:
                 awa_y_hat.append(y_combi_hat)
                 rmse_combi = math.sqrt(np.mean(np.array(y - y_combi_hat) ** 2))
                 rm[t_idx] = rmse_combi / self.benchmark_rmse[idx]
+                dm_r = dm_test(y, self.benchmarky[i], y_combi_hat, h=1, crit="MSE")
+                pvalue = dm_r[1]
+                if pvalue <= 0.05:
+                    rm[t_idx] = rm[t_idx] + 500
 
                 # BWA
                 type = 'BIC_t'
@@ -247,6 +312,10 @@ class Postdata:
                 bwa_y_hat.append(y_combi_hat)
                 rmse_combi = math.sqrt(np.mean(np.array(y - y_combi_hat) ** 2))
                 rm[t_idx] = rmse_combi / self.benchmark_rmse[idx]
+                dm_r = dm_test(y, self.benchmarky[i], y_combi_hat, h=1, crit="MSE")
+                pvalue = dm_r[1]
+                if pvalue <= 0.05:
+                    rm[t_idx] = rm[t_idx] + 500
 
                 # GR
                 t_idx = 6 + 7 * skip_idx
@@ -272,7 +341,13 @@ class Postdata:
                 gr_y_hat.append(y_combi_hat)
                 rmse_combi = math.sqrt(np.mean(np.array(y - y_combi_hat) ** 2))
                 rm[t_idx] = rmse_combi / self.benchmark_rmse[idx]
+                dm_r = dm_test(y, self.benchmarky[i], y_combi_hat, h=1, crit="MSE")
+                pvalue = dm_r[1]
+                if pvalue <= 0.05:
+                    rm[t_idx] = rm[t_idx] + 500
 
+                i = i + 1
+        i = 0
         # PCA+UMAP
         for idx, (pca_pls, umap_pls, y, pca_y_hat, umap_y_hat, rm) in enumerate(
                 zip(self.PCA_PLS, self.UMAP_PLS, self.testset_PCA_y, self.testset_PCA_y_hat, self.testset_UMAP_y_hat,
@@ -286,6 +361,10 @@ class Postdata:
             self.testset_PU_AVG_y_hat.append(y_combi_hat)
             rmse_combi = math.sqrt(np.mean(np.array(y - y_combi_hat) ** 2))
             rm[21] = rmse_combi / self.benchmark_rmse[idx]
+            dm_r = dm_test(y, self.benchmarky[i], y_combi_hat, h=1, crit="MSE")
+            pvalue = dm_r[1]
+            if pvalue <= 0.05:
+                rm[21] = rm[21] + 500
 
             # GR
             y_hat_pls = np.concatenate((pca_y_hat_pls, umap_y_hat_pls), axis=0)
@@ -311,6 +390,12 @@ class Postdata:
             self.testset_PU_GR_y_hat.append(y_combi_hat)
             rmse_combi = math.sqrt(np.mean(np.array(y - y_combi_hat) ** 2))
             rm[22] = rmse_combi / self.benchmark_rmse[idx]
+            dm_r = dm_test(y, self.benchmarky[i], y_combi_hat, h=1, crit="MSE")
+            pvalue = dm_r[1]
+            if pvalue <= 0.05:
+                rm[22] = rm[22] + 500
+
+            i = i + 1
 
         # Printing to excel
         wb = openpyxl.Workbook()
@@ -340,3 +425,4 @@ class Postdata:
 
 
         pass
+
