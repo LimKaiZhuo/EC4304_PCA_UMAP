@@ -37,7 +37,13 @@ def selector(case, var_name=None):
 
 
 
-selector(1, var_name='IND')
-#selector(2)
+selector(1, var_name='CMR')
+selector(1, var_name='CPIAUCSL')
+selector(1, var_name='CPIULFSL')
+selector(1, var_name='DPC') #not numeric error
+selector(1, var_name='IND') #not numeric error
+selector(1, var_name='PAY')
+selector(1, var_name='WPSFD49207')
+selector(2)
 
 
