@@ -33,6 +33,7 @@ def selector(case, excel_dir = None, var_name=None):
         r, ic_store = fl.pca_k_selection(lower_k=5, upper_k=40)
         print(ic_store)
     elif case == 3:
+        # Training and validation set
         var_name = var_name
         excel_dir = excel_dir
         results_dir = create_results_directory('./results/test')
@@ -42,7 +43,7 @@ def selector(case, excel_dir = None, var_name=None):
                               y=output[4], y_names=output[5],
                               time_stamp=output[6])
         (f_tv, f_tt), (yo_tv, yo_t), (y_tv, y_tt),\
-        (ts_tv, ts_tt), (tidx_tv, tidx_tt), (nobs_tv, nobs_tt) = fl_master.percentage_split(0)
+        (ts_tv, ts_tt), (tidx_tv, tidx_tt), (nobs_tv, nobs_tt) = fl_master.percentage_split(0.2)
         fl = Fl_pca(val_split=0.2, x=f_tv, yo=yo_tv, y=y_tv,
                     time_stamp=ts_tv, time_idx=tidx_tv,
                     features_names=fl_master.features_names, labels_names=fl_master.labels_names,
@@ -84,6 +85,7 @@ def selector(case, excel_dir = None, var_name=None):
 
             wb.save(filename='{}/{}_{}_{}.xlsx'.format(results_dir, var_name, model, type))
     elif case == 4:
+        # Test set
         var_name = var_name
         excel_dir = excel_dir
         results_dir = create_results_directory('./results/test')
@@ -93,14 +95,14 @@ def selector(case, excel_dir = None, var_name=None):
                               y=output[4], y_names=output[5],
                               time_stamp=output[6])
         (f_tv, f_tt), (yo_tv, yo_t), (y_tv, y_tt),\
-        (ts_tv, ts_tt), (tidx_tv, tidx_tt), (nobs_tv, nobs_tt) = fl_master.percentage_split(0.2)
+        (ts_tv, ts_tt), (tidx_tv, tidx_tt), (nobs_tv, nobs_tt) = fl_master.percentage_split(0)
         fl = Fl_pca(val_split=0.2, x=f_tv, yo=yo_tv, y=y_tv,
                     time_stamp=ts_tv, time_idx=tidx_tv,
                     features_names=fl_master.features_names, labels_names=fl_master.labels_names,
                     y_names=fl_master.y_names)
         h_steps = [1,3,6,12,24]
-        type_store = ['AIC_BIC']
-        model_store = ['UMAP']
+        type_store = ['PLS']
+        model_store = ['PCA']
         #type_store = ['AIC_BIC']
         #model_store = ['UMAP']
         for type, model in zip(type_store, model_store):
@@ -119,7 +121,7 @@ def selector(case, excel_dir = None, var_name=None):
                 start = time.time()
                 df = fl.hparam_selection(model=model, type=type, bounds_m=bounds_m, bounds_p=bounds_p, h=h, h_idx=idx,
                                          h_max=max(h_steps), r=9, results_dir=results_dir,
-                                         extension=False)
+                                         extension=False, rolling=True)
                 wb.create_sheet('{}_h_{}'.format(type, h))
                 sheet_name = wb.sheetnames[-1]
                 ws = wb[sheet_name]
@@ -141,10 +143,10 @@ def selector(case, excel_dir = None, var_name=None):
 selector(4, excel_dir='./excel/W875RX1_data_loader.xlsx', var_name='W875RX1')
 
 #selector(3, excel_dir='./excel/WPSFD49207_data_loader.xlsx', var_name='WPSFD49207')
-selector(4, excel_dir='./excel/WPSFD49207_data_loader.xlsx', var_name='WPSFD49207')
+#selector(4, excel_dir='./excel/WPSFD49207_data_loader.xlsx', var_name='WPSFD49207')
 
 #selector(3, excel_dir='./excel/IND_data_loader.xlsx', var_name='IND')
-selector(4, excel_dir='./excel/IND_data_loader.xlsx', var_name='IND')
+#selector(4, excel_dir='./excel/IND_data_loader.xlsx', var_name='IND')
 
 #selector(3, excel_dir='./excel/PAY_data_loader.xlsx', var_name='PAY')
-selector(4, excel_dir='./excel/PAY_data_loader.xlsx', var_name='PAY')
+#selector(4, excel_dir='./excel/PAY_data_loader.xlsx', var_name='PAY')

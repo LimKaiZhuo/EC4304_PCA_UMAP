@@ -259,9 +259,12 @@ class Fl_master:
         return v
 
     def prepare_validation_data_h_step_ahead(self, x_v, yo_v, y_v, h):
-        return x_v[:-h, :], yo_v[:-h, :], y_v[h:]
+        if h == 1:
+            return x_v, yo_v, y_v
+        else:
+            return x_v[:-(h-1), :], yo_v[:-(h-1), :], y_v[h-1:]
 
-    def pls_expanding_window(self, h, m, p, r, factor_model, x_t, yo_t, y_t, x_v, yo_v, y_v):
+    def pls_expanding_window(self, h, m, p, r, factor_model, x_t, yo_t, y_t, x_v, yo_v, y_v, rolling=False):
         y_hat_store = []
         e_hat_store = []
 
@@ -287,6 +290,12 @@ class Fl_master:
             x_t = np.concatenate((x_t, np.array(x_1)[None, ...]), axis=0)
             yo_t = np.concatenate((yo_t, np.array(yo_1)[None, ...]), axis=0)
             y_t = np.concatenate((y_t, np.array(y_1)[None, ...]), axis=0)
+
+            if rolling:
+                # Drop the first observation in the matrix for rolling window
+                x_t = x_t[1:,:]
+                yo_t = yo_t[1:,:]
+                y_t = y_t[1:,:]
 
             if idx + 1 == n_val:
                 break  # since last iteration, no need to waste time re-estimating model
@@ -348,9 +357,12 @@ class Fl_master:
         return v
 
     def ar_prepare_validation_data_h_step_ahead(self, yo_v, y_v, h):
-        return yo_v[:-h, :], y_v[h:]
+        if h == 1:
+            return yo_v, y_v
+        else:
+            return yo_v[:-(h-1), :], y_v[h-1:]
 
-    def ar_pls_expanding_window(self, h, p, r, yo_t, y_t, yo_v, y_v):
+    def ar_pls_expanding_window(self, h, p, r, yo_t, y_t, yo_v, y_v, rolling=False):
         y_hat_store = []
         e_hat_store = []
 
@@ -374,6 +386,10 @@ class Fl_master:
 
             yo_t = np.concatenate((yo_t, np.array(yo_1)[None, ...]), axis=0)
             y_t = np.concatenate((y_t, np.array(y_1)[None, ...]), axis=0)
+
+            if rolling:
+                yo_t = yo_t[1:,:]
+                y_t = y_t[1:,:]
 
             if idx + 1 == n_val:
                 break  # since last iteration, no need to waste time re-estimating model
@@ -432,7 +448,7 @@ class Fl_pca(Fl_master):
 
         return r, ic_store
 
-    def hparam_selection(self, model, type, bounds_m, bounds_p, h, h_idx, h_max, r, results_dir, extension=False):
+    def hparam_selection(self, model, type, bounds_m, bounds_p, h, h_idx, h_max, r, results_dir, extension=False, rolling=False):
         if extension:
             m_init = list(range(bounds_m[0], bounds_m[1] + 1))
             p_init = list(range(bounds_p[0], bounds_p[1] + 1))
@@ -471,7 +487,8 @@ class Fl_pca(Fl_master):
                                                                           x_t=self.x_t, yo_t=self.yo_t,
                                                                           y_t=self.y_t[:, h_idx][..., None],
                                                                           x_v=self.x_v, yo_v=self.yo_v,
-                                                                          y_v=self.y_v[:, h_idx][..., None])
+                                                                          y_v=self.y_v[:, h_idx][..., None],
+                                                                          rolling=rolling)
 
                     rmse_store.append(rmse)
                     aic_t_store.append(results_t.aic)
@@ -482,7 +499,7 @@ class Fl_pca(Fl_master):
                                                        np.array(aic_t_store)[..., None],
                                                        np.array(bic_t_store)[..., None],
                                                        np.array(y_hat_store)), axis=1),
-                                  columns=['m', 'p', 'Val RMSE', 'AIC_t', 'BIC_t'] + self.y_v[h:, h_idx].flatten().tolist())
+                                  columns=['m', 'p', 'Val RMSE', 'AIC_t', 'BIC_t'] + self.y_v[h-1:, h_idx].flatten().tolist())
 
 
             elif type == 'AIC_BIC':
@@ -505,7 +522,8 @@ class Fl_pca(Fl_master):
                     y_hat, _, rmse, results_t = self.ar_pls_expanding_window(h=h, p=p, r=r, yo_t=self.yo_t,
                                                                              y_t=self.y_t[:, h_idx][..., None],
                                                                              yo_v=self.yo_v,
-                                                                             y_v=self.y_v[:, h_idx][..., None])
+                                                                             y_v=self.y_v[:, h_idx][..., None],
+                                                                             rolling=rolling)
 
                     rmse_store.append(rmse)
                     aic_t_store.append(results_t.aic)
@@ -516,7 +534,7 @@ class Fl_pca(Fl_master):
                                                        np.array(aic_t_store)[..., None],
                                                        np.array(bic_t_store)[..., None],
                                                        np.array(y_hat_store)), axis=1),
-                                  columns=['m', 'p', 'Val RMSE', 'AIC_t', 'BIC_t'] + self.y_v[h:, h_idx].flatten().tolist())
+                                  columns=['m', 'p', 'Val RMSE', 'AIC_t', 'BIC_t'] + self.y_v[h-1:, h_idx].flatten().tolist())
 
 
             elif type == 'AIC_BIC':

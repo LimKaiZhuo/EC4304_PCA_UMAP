@@ -105,7 +105,7 @@ class Postdata:
 
         self.num_h = len(self.AR_AIC_BIC)
         self.pm_store = [np.zeros((9, 2)) for x in range(self.num_h)]
-        self.rm_store = [np.zeros((23)) for x in range(self.num_h)]
+        self.rm_store = [np.zeros((23), dtype=np.object) for x in range(self.num_h)]
         self.benchmark_rmse = []
         self.benchmarky = []
         i = 0
@@ -115,7 +115,7 @@ class Postdata:
             self.benchmark_forecasted_y_BIC = []
             min_BIC_idx = np.argmin(aic['BIC_t'])
             pm[1, 1] = aic['p'][min_BIC_idx]
-            rm[1] = 1
+            rm[1] = 1.0000
             rmse_idx = test.index[test['p'] == pm[1, 1]].tolist()[0]
             self.benchmark_rmse.append(test['Val RMSE'][rmse_idx])
             self.benchmarky.append(yhat[rmse_idx])
@@ -124,25 +124,25 @@ class Postdata:
             pm[0, 1] = aic['p'][min_AIC_idx]
             rmse_idx2 = test.index[test['p'] == pm[0, 1]].tolist()[0]
             rmse = test['Val RMSE'][rmse_idx2]
-            rm[0] = rmse / self.benchmark_rmse[-1]
+            rm[0] = round(rmse / self.benchmark_rmse[-1],4)
             if rmse_idx != rmse_idx2:
                 forecastedy = yhat[rmse_idx2]
                 dm_r = dm_test(y, self.benchmarky[i], forecastedy, h=1, crit="MSE")
                 pvalue = dm_r[1]
                 if pvalue <= 0.05:
-                    rm[0] = rm[0] + 500
+                    rm[0] = '{}*'.format(round(rm[0],4))
 
             min_idx = np.argmin(pls['Val RMSE'])
             pm[2, 1] = pls['p'][min_idx]
             rmse_idx2 = test.index[test['p'] == pm[2, 1]].tolist()[0]
             rmse = test['Val RMSE'][rmse_idx2]
-            rm[2] = rmse / self.benchmark_rmse[-1]
+            rm[2] = round(rmse / self.benchmark_rmse[-1],4)
             if rmse_idx != rmse_idx2:
                 forecastedy = yhat[rmse_idx2]
                 dm_r = dm_test(y, self.benchmarky[i], forecastedy, h=1, crit="MSE")
                 pvalue = dm_r[1]
                 if pvalue <= 0.05:
-                    rm[2] = rm[2] + 500
+                    rm[2] = '{}*'.format(round(rm[2],4))
 
             i = i + 1
 
@@ -157,13 +157,13 @@ class Postdata:
             pm[1 + skip, 1] = aic['p'][min_BIC_idx]
             rmse_idx = test.index[(test['m'] == pm[1 + skip, 0]) & (test['p'] == pm[1 + skip, 1])].tolist()[0]
             rmse = test['Val RMSE'][rmse_idx]
-            rm[1 + skip2] = rmse / self.benchmark_rmse[idx]
+            rm[1 + skip2] = round(rmse / self.benchmark_rmse[idx],4)
             forecastedy = yhat[rmse_idx]
             if np.all(self.benchmarky[i] != forecastedy):
                 dm_r = dm_test(y, self.benchmarky[i], forecastedy, h=1, crit="MSE")
                 pvalue = dm_r[1]
                 if pvalue <= 0.05:
-                    rm[1 + skip2] = rm[1 + skip2] + 500
+                    rm[1 + skip2] = '{}*'.format(round(rm[1+skip2],4))
 
 
 
@@ -172,26 +172,26 @@ class Postdata:
             pm[0 + skip, 1] = aic['p'][min_AIC_idx]
             rmse_idx = test.index[(test['m'] == pm[0 + skip, 0]) & (test['p'] == pm[0 + skip, 1])].tolist()[0]
             rmse = test['Val RMSE'][rmse_idx]
-            rm[0 + skip2] = rmse / self.benchmark_rmse[idx]
+            rm[0 + skip2] = round(rmse / self.benchmark_rmse[idx],4)
             forecastedy = yhat[rmse_idx]
             if np.all(self.benchmarky[i] != forecastedy):
                 dm_r = dm_test(y, self.benchmarky[i], forecastedy, h=1, crit="MSE")
                 pvalue = dm_r[1]
                 if pvalue <= 0.05:
-                    rm[0 + skip2] = rm[0 + skip2] + 500
+                    rm[0 + skip2] = '{}*'.format(round(rm[0+skip2],4))
 
             min_idx = np.argmin(pls['Val RMSE'])
             pm[2 + skip, 0] = pls['m'][min_idx]
             pm[2 + skip, 1] = pls['p'][min_idx]
             rmse_idx = test.index[(test['m'] == pm[2 + skip, 0]) & (test['p'] == pm[2 + skip, 1])].tolist()[0]
             rmse = test['Val RMSE'][rmse_idx]
-            rm[2 + skip2] = rmse / self.benchmark_rmse[idx]
+            rm[2 + skip2] = round(rmse / self.benchmark_rmse[idx],4)
             forecastedy = yhat[rmse_idx]
             if np.all(self.benchmarky[i] != forecastedy):
                 dm_r = dm_test(y, self.benchmarky[i], forecastedy, h=1, crit="MSE")
                 pvalue = dm_r[1]
                 if pvalue <= 0.05:
-                    rm[2 + skip2] = rm[2 + skip2] + 500
+                    rm[2 + skip2] = '{}*'.format(round(rm[2+skip2],4))
 
             i = i + 1
 
@@ -206,39 +206,39 @@ class Postdata:
             pm[1 + skip, 1] = aic['p'][min_BIC_idx]
             rmse_idx = test.index[(test['m'] == pm[1 + skip, 0]) & (test['p'] == pm[1 + skip, 1])].tolist()[0]
             rmse = test['Val RMSE'][rmse_idx]
-            rm[1 + skip2] = rmse / self.benchmark_rmse[idx]
+            rm[1 + skip2] = round(rmse / self.benchmark_rmse[idx],4)
             forecastedy = yhat[rmse_idx]
             if np.all(self.benchmarky[i] != forecastedy):
                 dm_r = dm_test(y, self.benchmarky[i], forecastedy, h=1, crit="MSE")
                 pvalue = dm_r[1]
                 if pvalue <= 0.05:
-                    rm[1 + skip2] = rm[1 + skip2] + 500
+                    rm[1 + skip2] = '{}*'.format(round(rm[1+skip2],4))
 
             min_AIC_idx = np.argmin(aic['AIC_t'])
             pm[0 + skip, 0] = aic['m'][min_AIC_idx]
             pm[0 + skip, 1] = aic['p'][min_AIC_idx]
             rmse_idx = test.index[(test['m'] == pm[0 + skip, 0]) & (test['p'] == pm[0 + skip, 1])].tolist()[0]
             rmse = test['Val RMSE'][rmse_idx]
-            rm[0 + skip2] = rmse / self.benchmark_rmse[idx]
+            rm[0 + skip2] = round(rmse / self.benchmark_rmse[idx],4)
             forecastedy = yhat[rmse_idx]
             if np.all(self.benchmarky[i] != forecastedy):
                 dm_r = dm_test(y, self.benchmarky[i], forecastedy, h=1, crit="MSE")
                 pvalue = dm_r[1]
                 if pvalue <= 0.05:
-                    rm[0 + skip2] = rm[0 + skip2] + 500
+                    rm[0 + skip2] = '{}*'.format(round(rm[0+skip2],4))
 
             min_idx = np.argmin(pls['Val RMSE'])
             pm[2 + skip, 0] = pls['m'][min_idx]
             pm[2 + skip, 1] = pls['p'][min_idx]
             rmse_idx = test.index[(test['m'] == pm[2 + skip, 0]) & (test['p'] == pm[2 + skip, 1])].tolist()[0]
             rmse = test['Val RMSE'][rmse_idx]
-            rm[2 + skip2] = rmse / self.benchmark_rmse[idx]
+            rm[2 + skip2] = round(rmse / self.benchmark_rmse[idx],4)
             forecastedy = yhat[rmse_idx]
             if np.all(self.benchmarky[i] != forecastedy):
                 dm_r = dm_test(y, self.benchmarky[i], forecastedy, h=1, crit="MSE")
                 pvalue = dm_r[1]
                 if pvalue <= 0.05:
-                    rm[2 + skip2] = rm[2 + skip2] + 500
+                    rm[2 + skip2] = '{}*'.format(round(rm[2+skip2],4))
 
             i = i + 1
 
@@ -283,12 +283,12 @@ class Postdata:
                 y_combi_hat = np.mean(y_hat, axis=0)
                 avg_y_hat.append(y_combi_hat)
                 rmse_combi = math.sqrt(np.mean(np.array(y - y_combi_hat) ** 2))
-                rm[t_idx] = rmse_combi / self.benchmark_rmse[idx]
+                rm[t_idx] = round(rmse_combi / self.benchmark_rmse[idx],4)
                 if np.all(self.benchmarky[i] != y_combi_hat):
                     dm_r = dm_test(y, self.benchmarky[i], y_combi_hat, h=1, crit="MSE")
                     pvalue = dm_r[1]
                     if pvalue <= 0.05:
-                        rm[t_idx] = rm[t_idx] + 500
+                        rm[t_idx] = '{}*'.format(round(rm[t_idx],4))
 
                 # AWA
                 type = 'AIC_t'
@@ -301,12 +301,12 @@ class Postdata:
                 y_combi_hat = np.sum(y_hat * weights[:, None], axis=0)
                 awa_y_hat.append(y_combi_hat)
                 rmse_combi = math.sqrt(np.mean(np.array(y - y_combi_hat) ** 2))
-                rm[t_idx] = rmse_combi / self.benchmark_rmse[idx]
+                rm[t_idx] = round(rmse_combi / self.benchmark_rmse[idx],4)
                 if np.all(self.benchmarky[i] != y_combi_hat):
                     dm_r = dm_test(y, self.benchmarky[i], y_combi_hat, h=1, crit="MSE")
                     pvalue = dm_r[1]
                     if pvalue <= 0.05:
-                        rm[t_idx] = rm[t_idx] + 500
+                        rm[t_idx] = '{}*'.format(round(rm[t_idx],4))
 
                 # BWA
                 type = 'BIC_t'
@@ -319,12 +319,12 @@ class Postdata:
                 y_combi_hat = np.sum(y_hat * weights[:, None], axis=0)
                 bwa_y_hat.append(y_combi_hat)
                 rmse_combi = math.sqrt(np.mean(np.array(y - y_combi_hat) ** 2))
-                rm[t_idx] = rmse_combi / self.benchmark_rmse[idx]
+                rm[t_idx] = round(rmse_combi / self.benchmark_rmse[idx],4)
                 if np.all(self.benchmarky[i] != y_combi_hat):
                     dm_r = dm_test(y, self.benchmarky[i], y_combi_hat, h=1, crit="MSE")
                     pvalue = dm_r[1]
                     if pvalue <= 0.05:
-                        rm[t_idx] = rm[t_idx] + 500
+                        rm[t_idx] = '{}*'.format(round(rm[t_idx],4))
 
                 # GR
                 t_idx = 6 + 7 * skip_idx
@@ -349,12 +349,12 @@ class Postdata:
                 y_combi_hat = np.sum(y_hat * beta_hat[1:, 0][:, None] + beta_hat[0, 0], axis=0)
                 gr_y_hat.append(y_combi_hat)
                 rmse_combi = math.sqrt(np.mean(np.array(y - y_combi_hat) ** 2))
-                rm[t_idx] = rmse_combi / self.benchmark_rmse[idx]
+                rm[t_idx] = round(rmse_combi / self.benchmark_rmse[idx],4)
                 if np.all(self.benchmarky[i] != y_combi_hat):
                     dm_r = dm_test(y, self.benchmarky[i], y_combi_hat, h=1, crit="MSE")
                     pvalue = dm_r[1]
                     if pvalue <= 0.05:
-                        rm[t_idx] = rm[t_idx] + 500
+                        rm[t_idx] = '{}*'.format(round(rm[t_idx],4))
 
                 i = i + 1
         i = 0
@@ -370,12 +370,12 @@ class Postdata:
             y_combi_hat = np.mean(np.concatenate((pca_y_hat, umap_y_hat), axis=0), axis=0)
             self.testset_PU_AVG_y_hat.append(y_combi_hat)
             rmse_combi = math.sqrt(np.mean(np.array(y - y_combi_hat) ** 2))
-            rm[21] = rmse_combi / self.benchmark_rmse[idx]
+            rm[21] = round(rmse_combi / self.benchmark_rmse[idx],4)
             if np.all(self.benchmarky[i] != y_combi_hat):
                 dm_r = dm_test(y, self.benchmarky[i], y_combi_hat, h=1, crit="MSE")
                 pvalue = dm_r[1]
                 if pvalue <= 0.05:
-                    rm[21] = rm[21] + 500
+                    rm[21] = '{}*'.format(round(rm[21],4))
 
             # GR
             y_hat_pls = np.concatenate((pca_y_hat_pls, umap_y_hat_pls), axis=0)
@@ -400,12 +400,12 @@ class Postdata:
             y_combi_hat = np.sum(y_hat * beta_hat[1:, 0][:, None] + beta_hat[0, 0], axis=0)
             self.testset_PU_GR_y_hat.append(y_combi_hat)
             rmse_combi = math.sqrt(np.mean(np.array(y - y_combi_hat) ** 2))
-            rm[22] = rmse_combi / self.benchmark_rmse[idx]
+            rm[22] = round(rmse_combi / self.benchmark_rmse[idx],4)
             if np.all(self.benchmarky[i] != y_combi_hat):
                 dm_r = dm_test(y, self.benchmarky[i], y_combi_hat, h=1, crit="MSE")
                 pvalue = dm_r[1]
                 if pvalue <= 0.05:
-                    rm[22] = rm[22] + 500
+                    rm[22] = '{}*'.format(round(rm[22],4))
 
             i = i + 1
 
@@ -425,7 +425,7 @@ class Postdata:
                     ws.cell(row=r_idx + 1, column=c_idx, value=value)
 
             skip = len(pm_df.index) + 1
-            rm_df = pd.DataFrame(data=rm, columns=['Relative RMSE'])
+            rm_df = pd.DataFrame(rm, columns=['Relative RMSE'])
             rows = dataframe_to_rows(rm_df, index=False)
             for r_idx, row in enumerate(rows, 1):
                 for c_idx, value in enumerate(row, 1):
