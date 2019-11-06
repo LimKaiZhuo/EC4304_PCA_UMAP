@@ -51,8 +51,10 @@ def selector(case, excel_dir = None, var_name=None):
         h_steps = [1,3,6,12,24]
         #type_store = ['PLS','PLS',  'PLS']
         #model_store = ['AR',  'PCA',  'UMAP']
-        type_store = ['PLS']
-        model_store = ['UMAP']
+        #type_store = ['AIC_BIC']
+        #model_store = ['UMAP']
+        type_store = ['AIC_BIC', 'AIC_BIC', 'AIC_BIC', 'PLS', 'PLS', 'PLS']
+        model_store = ['AR', 'PCA', 'UMAP', 'AR', 'PCA', 'UMAP']
         for type, model in zip(type_store, model_store):
             print('{}_{} Experiment'.format(type, model))
             wb = openpyxl.Workbook()
@@ -101,8 +103,8 @@ def selector(case, excel_dir = None, var_name=None):
                     features_names=fl_master.features_names, labels_names=fl_master.labels_names,
                     y_names=fl_master.y_names)
         h_steps = [1,3,6,12,24]
-        type_store = ['PLS']
-        model_store = ['PCA']
+        type_store = ['PLS', 'PLS', 'PLS']
+        model_store = ['AR',  'PCA',  'UMAP']
         #type_store = ['AIC_BIC']
         #model_store = ['UMAP']
         for type, model in zip(type_store, model_store):
@@ -139,14 +141,20 @@ def selector(case, excel_dir = None, var_name=None):
 
     pass
 
-#selector(3, excel_dir='./excel/W875RX1_data_loader.xlsx', var_name='W875RX1')
+selector(3, excel_dir='./excel/W875RX1_data_loader.xlsx', var_name='W875RX1')
 selector(4, excel_dir='./excel/W875RX1_data_loader.xlsx', var_name='W875RX1')
 
-#selector(3, excel_dir='./excel/WPSFD49207_data_loader.xlsx', var_name='WPSFD49207')
-#selector(4, excel_dir='./excel/WPSFD49207_data_loader.xlsx', var_name='WPSFD49207')
+selector(3, excel_dir='./excel/WPSFD49207_data_loader.xlsx', var_name='WPSFD49207')
+selector(4, excel_dir='./excel/WPSFD49207_data_loader.xlsx', var_name='WPSFD49207')
 
-#selector(3, excel_dir='./excel/IND_data_loader.xlsx', var_name='IND')
-#selector(4, excel_dir='./excel/IND_data_loader.xlsx', var_name='IND')
+selector(3, excel_dir='./excel/IND_data_loader.xlsx', var_name='IND')
+selector(4, excel_dir='./excel/IND_data_loader.xlsx', var_name='IND')
 
-#selector(3, excel_dir='./excel/PAY_data_loader.xlsx', var_name='PAY')
-#selector(4, excel_dir='./excel/PAY_data_loader.xlsx', var_name='PAY')
+selector(3, excel_dir='./excel/PAY_data_loader.xlsx', var_name='PAY')
+selector(4, excel_dir='./excel/PAY_data_loader.xlsx', var_name='PAY')
+
+selector(3, excel_dir='./excel/CMR_data_loader.xlsx', var_name='CMR')
+selector(4, excel_dir='./excel/CMR_data_loader.xlsx', var_name='CMR')
+
+selector(3, excel_dir='./excel/DPC_data_loader.xlsx', var_name='DPC')
+selector(4, excel_dir='./excel/DPC_data_loader.xlsx', var_name='DPC')
