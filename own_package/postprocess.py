@@ -117,9 +117,9 @@ class Postdata:
             self.benchmark_forecasted_y_BIC = []
             min_BIC_idx = np.argmin(aic['BIC_t'])
             pm[1, 1] = aic['p'][min_BIC_idx]
-            rm[1] = 1.0000
             rmse_idx = test.index[test['p'] == pm[1, 1]].tolist()[0]
             self.benchmark_rmse.append(test['Val RMSE'][rmse_idx])
+            rm[1] = test['Val RMSE'][rmse_idx], 4)
             self.benchmarky.append(yhat[rmse_idx])
 
             min_AIC_idx = np.argmin(aic['AIC_t'])
