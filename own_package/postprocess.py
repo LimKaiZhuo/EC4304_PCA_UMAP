@@ -108,6 +108,7 @@ class Postdata:
         self.rm_store = [np.zeros((23), dtype=np.object) for x in range(self.num_h)]
         self.benchmark_rmse = []
         self.benchmarky = []
+        self.hsteps = [1, 3, 6, 12, 24]
         i = 0
         # Iterate through each h step ahead values for all AR. h = 1,3,6,12,24
         for idx, (aic, pls, test, pm, rm, yhat, y) in enumerate(
@@ -128,7 +129,7 @@ class Postdata:
             rm[0] = round(rmse / self.benchmark_rmse[-1], 4)
             if rmse_idx != rmse_idx2:
                 forecastedy = yhat[rmse_idx2]
-                dm_r = dm_test(y, self.benchmarky[i], forecastedy, h=1, crit="MSE")
+                dm_r = dm_test(y, self.benchmarky[i], forecastedy, h=self.hsteps[i], crit="MSE")
                 pvalue = dm_r[1]
                 if pvalue <= 0.05 and self.star:
                     rm[0] = '{}*'.format(round(rm[0], 4))
@@ -140,7 +141,7 @@ class Postdata:
             rm[2] = round(rmse / self.benchmark_rmse[-1], 4)
             if rmse_idx != rmse_idx2:
                 forecastedy = yhat[rmse_idx2]
-                dm_r = dm_test(y, self.benchmarky[i], forecastedy, h=1, crit="MSE")
+                dm_r = dm_test(y, self.benchmarky[i], forecastedy, h=self.hsteps[i], crit="MSE")
                 pvalue = dm_r[1]
                 if pvalue <= 0.05 and self.star:
                     rm[2] = '{}*'.format(round(rm[2], 4))
@@ -162,7 +163,7 @@ class Postdata:
             rm[1 + skip2] = round(rmse / self.benchmark_rmse[idx], 4)
             forecastedy = yhat[rmse_idx]
             if np.all(self.benchmarky[i] != forecastedy):
-                dm_r = dm_test(y, self.benchmarky[i], forecastedy, h=1, crit="MSE")
+                dm_r = dm_test(y, self.benchmarky[i], forecastedy, h=self.hsteps[i], crit="MSE")
                 pvalue = dm_r[1]
                 if pvalue <= 0.05 and self.star:
                     rm[1 + skip2] = '{}*'.format(round(rm[1 + skip2], 4))
@@ -175,7 +176,7 @@ class Postdata:
             rm[0 + skip2] = round(rmse / self.benchmark_rmse[idx], 4)
             forecastedy = yhat[rmse_idx]
             if np.all(self.benchmarky[i] != forecastedy):
-                dm_r = dm_test(y, self.benchmarky[i], forecastedy, h=1, crit="MSE")
+                dm_r = dm_test(y, self.benchmarky[i], forecastedy, h=self.hsteps[i], crit="MSE")
                 pvalue = dm_r[1]
                 if pvalue <= 0.05 and self.star:
                     rm[0 + skip2] = '{}*'.format(round(rm[0 + skip2], 4))
@@ -188,7 +189,7 @@ class Postdata:
             rm[2 + skip2] = round(rmse / self.benchmark_rmse[idx], 4)
             forecastedy = yhat[rmse_idx]
             if np.all(self.benchmarky[i] != forecastedy):
-                dm_r = dm_test(y, self.benchmarky[i], forecastedy, h=1, crit="MSE")
+                dm_r = dm_test(y, self.benchmarky[i], forecastedy, h=self.hsteps[i], crit="MSE")
                 pvalue = dm_r[1]
                 if pvalue <= 0.05 and self.star:
                     rm[2 + skip2] = '{}*'.format(round(rm[2 + skip2], 4))
@@ -210,7 +211,7 @@ class Postdata:
             rm[1 + skip2] = round(rmse / self.benchmark_rmse[idx], 4)
             forecastedy = yhat[rmse_idx]
             if np.all(self.benchmarky[i] != forecastedy):
-                dm_r = dm_test(y, self.benchmarky[i], forecastedy, h=1, crit="MSE")
+                dm_r = dm_test(y, self.benchmarky[i], forecastedy, h=self.hsteps[i], crit="MSE")
                 pvalue = dm_r[1]
                 if pvalue <= 0.05 and self.star:
                     rm[1 + skip2] = '{}*'.format(round(rm[1 + skip2], 4))
@@ -223,7 +224,7 @@ class Postdata:
             rm[0 + skip2] = round(rmse / self.benchmark_rmse[idx], 4)
             forecastedy = yhat[rmse_idx]
             if np.all(self.benchmarky[i] != forecastedy):
-                dm_r = dm_test(y, self.benchmarky[i], forecastedy, h=1, crit="MSE")
+                dm_r = dm_test(y, self.benchmarky[i], forecastedy, h=self.hsteps[i], crit="MSE")
                 pvalue = dm_r[1]
                 if pvalue <= 0.05 and self.star:
                     rm[0 + skip2] = '{}*'.format(round(rm[0 + skip2], 4))
@@ -236,7 +237,7 @@ class Postdata:
             rm[2 + skip2] = round(rmse / self.benchmark_rmse[idx], 4)
             forecastedy = yhat[rmse_idx]
             if np.all(self.benchmarky[i] != forecastedy):
-                dm_r = dm_test(y, self.benchmarky[i], forecastedy, h=1, crit="MSE")
+                dm_r = dm_test(y, self.benchmarky[i], forecastedy, h=self.hsteps[i], crit="MSE")
                 pvalue = dm_r[1]
                 if pvalue <= 0.05 and self.star:
                     rm[2 + skip2] = '{}*'.format(round(rm[2 + skip2], 4))
@@ -286,7 +287,7 @@ class Postdata:
                 rmse_combi = math.sqrt(np.mean(np.array(y - y_combi_hat) ** 2))
                 rm[t_idx] = round(rmse_combi / self.benchmark_rmse[idx], 4)
                 if np.all(self.benchmarky[i] != y_combi_hat):
-                    dm_r = dm_test(y, self.benchmarky[i], y_combi_hat, h=1, crit="MSE")
+                    dm_r = dm_test(y, self.benchmarky[i], y_combi_hat, h=self.hsteps[i], crit="MSE")
                     pvalue = dm_r[1]
                     if pvalue <= 0.05 and self.star:
                         rm[t_idx] = '{}*'.format(round(rm[t_idx], 4))
@@ -304,7 +305,7 @@ class Postdata:
                 rmse_combi = math.sqrt(np.mean(np.array(y - y_combi_hat) ** 2))
                 rm[t_idx] = round(rmse_combi / self.benchmark_rmse[idx], 4)
                 if np.all(self.benchmarky[i] != y_combi_hat):
-                    dm_r = dm_test(y, self.benchmarky[i], y_combi_hat, h=1, crit="MSE")
+                    dm_r = dm_test(y, self.benchmarky[i], y_combi_hat, h=self.hsteps[i], crit="MSE")
                     pvalue = dm_r[1]
                     if pvalue <= 0.05 and self.star:
                         rm[t_idx] = '{}*'.format(round(rm[t_idx], 4))
@@ -322,7 +323,7 @@ class Postdata:
                 rmse_combi = math.sqrt(np.mean(np.array(y - y_combi_hat) ** 2))
                 rm[t_idx] = round(rmse_combi / self.benchmark_rmse[idx], 4)
                 if np.all(self.benchmarky[i] != y_combi_hat):
-                    dm_r = dm_test(y, self.benchmarky[i], y_combi_hat, h=1, crit="MSE")
+                    dm_r = dm_test(y, self.benchmarky[i], y_combi_hat, h=self.hsteps[i], crit="MSE")
                     pvalue = dm_r[1]
                     if pvalue <= 0.05 and self.star:
                         rm[t_idx] = '{}*'.format(round(rm[t_idx], 4))
@@ -359,7 +360,7 @@ class Postdata:
                 rmse_combi = math.sqrt(np.mean(np.array(y - y_combi_hat) ** 2))
                 rm[t_idx] = round(rmse_combi / self.benchmark_rmse[idx], 4)
                 if np.all(self.benchmarky[i] != y_combi_hat):
-                    dm_r = dm_test(y, self.benchmarky[i], y_combi_hat, h=1, crit="MSE")
+                    dm_r = dm_test(y, self.benchmarky[i], y_combi_hat, h=self.hsteps[i], crit="MSE")
                     pvalue = dm_r[1]
                     if pvalue <= 0.05 and self.star:
                         rm[t_idx] = '{}*'.format(round(rm[t_idx], 4))
@@ -380,7 +381,7 @@ class Postdata:
             rmse_combi = math.sqrt(np.mean(np.array(y - y_combi_hat) ** 2))
             rm[21] = round(rmse_combi / self.benchmark_rmse[idx], 4)
             if np.all(self.benchmarky[i] != y_combi_hat):
-                dm_r = dm_test(y, self.benchmarky[i], y_combi_hat, h=1, crit="MSE")
+                dm_r = dm_test(y, self.benchmarky[i], y_combi_hat, h=self.hsteps[i], crit="MSE")
                 pvalue = dm_r[1]
                 if pvalue <= 0.05 and self.star:
                     rm[21] = '{}*'.format(round(rm[21], 4))
@@ -414,7 +415,7 @@ class Postdata:
             rmse_combi = math.sqrt(np.mean(np.array(y - y_combi_hat) ** 2))
             rm[22] = round(rmse_combi / self.benchmark_rmse[idx], 4)
             if np.all(self.benchmarky[i] != y_combi_hat):
-                dm_r = dm_test(y, self.benchmarky[i], y_combi_hat, h=1, crit="MSE")
+                dm_r = dm_test(y, self.benchmarky[i], y_combi_hat, h=self.hsteps[i], crit="MSE")
                 pvalue = dm_r[1]
                 if pvalue <= 0.05 and self.star:
                     rm[22] = '{}*'.format(round(rm[22], 4))
