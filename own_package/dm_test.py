@@ -175,7 +175,10 @@ def dm_test(actual_lst, pred1_lst, pred2_lst, h=1, crit="MSE", power=2):
     for lag in range(0, h):
         gamma.append(autocovariance(d_lst, len(d_lst), lag, mean_d))  # 0, 1, 2
     V_d = (gamma[0] + 2 * sum(gamma[1:])) / T
-    DM_stat = V_d ** (-0.5) * mean_d
+    if V_d < 0:
+        DM_stat = 0 # For possible occurrences of negative V_d, equate V_d as zero and hence DM_stat as zero.
+    else:
+        DM_stat = V_d ** (-0.5) * mean_d
     harvey_adj = ((T + 1 - 2 * h + h * (h - 1) / T) / T) ** (0.5)
     DM_stat = harvey_adj * DM_stat
     # Find p-value
