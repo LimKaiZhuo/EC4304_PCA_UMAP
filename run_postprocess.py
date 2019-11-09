@@ -5,7 +5,8 @@ import pickle
 def selector(case, var_name=None):
     if case == 1:
         results_dir = './results/{} Done'.format(var_name)
-        post=Postdata(results_dir=results_dir, var_name=var_name)
+        print('Post data processing for {}'.format(var_name))
+        post=Postdata(results_dir=results_dir, var_name=var_name, star=False)
         post.combination()
         #with open('{}/{}_data.pkl'.format(results_dir, var_name), 'wb') as output:
          #   pickle.dump(post, output, pickle.HIGHEST_PROTOCOL)
@@ -37,14 +38,14 @@ def selector(case, var_name=None):
 
 
 
-#selector(1, var_name='CMR')
-#selector(1, var_name='CPIAUCSL')
-#selector(1, var_name='CPIULFSL')
-#selector(1, var_name='DPC') #not numeric error
-#selector(1, var_name='IND') #not numeric error
-#selector(1, var_name='PAY')
-#selector(1, var_name='WPSFD49207')
-#selector(1, var_name='W875RX1')
+selector(1, var_name='CMR')
+selector(1, var_name='CPIAUCSL')
+selector(1, var_name='CPIULFSL')
+selector(1, var_name='DPC')
+selector(1, var_name='IND')
+selector(1, var_name='PAY')
+selector(1, var_name='WPSFD49207')
+selector(1, var_name='W875RX1')
 selector(2)
 
 
