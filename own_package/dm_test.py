@@ -1,3 +1,61 @@
+# Author   : John Tsang
+# Date     : December 7th, 2017
+# Purpose  : Implement the Diebold-Mariano Test (DM test) to compare
+#            forecast accuracy
+# Input    : 1) actual_lst: the list of actual values
+#            2) pred1_lst : the first list of predicted values
+#            3) pred2_lst : the second list of predicted values
+#            4) h         : the number of stpes ahead
+#            5) crit      : a string specifying the criterion
+#                             i)  MSE : the mean squared error
+#                            ii)  MAD : the mean absolute deviation
+#                           iii) MAPE : the mean absolute percentage error
+#                            iv) poly : use power function to weigh the errors
+#            6) poly      : the power for crit power
+#                           (it is only meaningful when crit is "poly")
+# Condition: 1) length of actual_lst, pred1_lst and pred2_lst is equal
+#            2) h must be an integer and it must be greater than 0 and less than
+#               the length of actual_lst.
+#            3) crit must take the 4 values specified in Input
+#            4) Each value of actual_lst, pred1_lst and pred2_lst must
+#               be numerical values. Missing values will not be accepted.
+#            5) power must be a numerical value.
+# Return   : a named-tuple of 2 elements
+#            1) p_value : the p-value of the DM test
+#            2) DM      : the test statistics of the DM test
+##########################################################
+# References:
+#
+# Harvey, D., Leybourne, S., & Newbold, P. (1997). Testing the equality of
+#   prediction mean squared errors. International Journal of forecasting,
+#   13(2), 281-291.
+#
+# Diebold, F. X. and Mariano, R. S. (1995), Comparing predictive accuracy,
+#   Journal of business & economic statistics 13(3), 253-264.
+#
+#MIT License
+#
+#Copyright (c) 2017 John Tsang
+#
+#Permission is hereby granted, free of charge, to any person obtaining a copy
+#of this software and associated documentation files (the "Software"), to deal
+#in the Software without restriction, including without limitation the rights
+#to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+#copies of the Software, and to permit persons to whom the Software is
+#furnished to do so, subject to the following conditions:
+#
+#The above copyright notice and this permission notice shall be included in all
+#copies or substantial portions of the Software.
+#
+#THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+#IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+#FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+#AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+#LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+#OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+#SOFTWARE.
+##########################################################
+
 def dm_test(actual_lst, pred1_lst, pred2_lst, h=1, crit="MSE", power=2):
     # Routine for checking errors
     def error_check():
