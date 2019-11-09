@@ -119,7 +119,7 @@ class Postdata:
             pm[1, 1] = aic['p'][min_BIC_idx]
             rmse_idx = test.index[test['p'] == pm[1, 1]].tolist()[0]
             self.benchmark_rmse.append(test['Val RMSE'][rmse_idx])
-            rm[1] = test['Val RMSE'][rmse_idx], 4)
+            rm[1] = round(test['Val RMSE'][rmse_idx], 4)
             self.benchmarky.append(yhat[rmse_idx])
 
             min_AIC_idx = np.argmin(aic['AIC_t'])
