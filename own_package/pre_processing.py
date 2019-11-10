@@ -29,7 +29,7 @@ def type_transformations(excel_dir, y_selection, h_steps):
             x_transformed = [np.nan] + x_transformed.tolist()
             x_store.append(x_transformed)
         elif type == 6:
-            x_transformed = np.array(x)[2:] - 2 * np.array(x)[1:-1] + np.array(x)[:-2]
+            x_transformed = np.log(np.array(x)[2:]) - 2 * np.log(np.array(x)[1:-1]) + np.log(np.array(x)[:-2])
             x_transformed = [np.nan, np.nan] + x_transformed.tolist()
             x_store.append(x_transformed)
         elif type == 7:
