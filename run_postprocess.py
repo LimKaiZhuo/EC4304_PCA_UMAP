@@ -39,7 +39,7 @@ def selector(case, var_name=None):
 
 
 #selector(1, var_name='CMR')
-selector(1, var_name='CPIAUCSL')
+selector(1, var_name='CMR')
 #selector(1, var_name='CPIULFSL')
 #selector(1, var_name='DPC')
 #selector(1, var_name='IND')
