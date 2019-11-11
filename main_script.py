@@ -101,8 +101,8 @@ def selector(case, excel_dir=None, var_name=None):
                     time_stamp=ts_tv, time_idx=tidx_tv,
                     features_names=fl_master.features_names, labels_names=fl_master.labels_names,
                     y_names=fl_master.y_names)
-        h_steps = [12]
-        h_idx_store = [3]  # h = 1 corresponds to h_idx=0, h=3 is h_idx=1, and so on
+        h_steps = [24]
+        h_idx_store = [4]  # h = 1 corresponds to h_idx=0, h=3 is h_idx=1, and so on
         #h_steps = [1,3,6,12,24]
         #h_idx = [0,1,2,3,4]
         type_store = ['PLS', 'PLS', 'PLS']
