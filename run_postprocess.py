@@ -6,7 +6,7 @@ def selector(case, var_name=None):
     if case == 1:
         results_dir = './results/{} Done'.format(var_name)
         print('Post data processing for {}'.format(var_name))
-        post=Postdata(results_dir=results_dir, var_name=var_name, star=True)
+        post=Postdata(results_dir=results_dir, var_name=var_name, star=False)
         post.combination()
         #with open('{}/{}_data.pkl'.format(results_dir, var_name), 'wb') as output:
          #   pickle.dump(post, output, pickle.HIGHEST_PROTOCOL)

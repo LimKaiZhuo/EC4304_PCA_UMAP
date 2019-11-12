@@ -74,14 +74,6 @@ def compile_pm_rm_excel(excel_dir_store):
     pass
 
 
-def qtest_string(element):
-    try:
-        element = '{}^'.format(round(element, 4))
-    except TypeError:
-        element = '{}^'.format(element, 4)
-    return element
-
-
 class Postdata:
     def __init__(self, results_dir, var_name, star=True):
         self.star = star
@@ -131,15 +123,7 @@ class Postdata:
             self.benchmark_rmse.append(test['Val RMSE'][rmse_idx])
             self.benchmarky.append(yhat[rmse_idx])
             rm[1] = round(test['Val RMSE'][rmse_idx], 4)
-            resids = y - self.benchmarky[i]
-            lag = int(math.sqrt(len(y)))
-            LBqtest = sm.stats.diagnostic.acorr_ljungbox(resids, lags=lag)
-            Qpval = LBqtest[1][-1]
-            if Qpval <= 0.05 and self.star:
-                try:
-                    rm[1] = '{}^'.format(round(rm[1], 4))
-                except TypeError:
-                    rm[1] = '{}^'.format(rm[1], 4)
+
 
 
             min_AIC_idx = np.argmin(aic['AIC_t'])
@@ -154,12 +138,7 @@ class Postdata:
                 pvalue = dm_r[1]
                 if pvalue <= 0.05 and self.star:
                     rm[0] = '{}*'.format(round(rm[0], 4))
-            resids = y - forecastedy
-            lag = int(math.sqrt(len(y)))
-            LBqtest = sm.stats.diagnostic.acorr_ljungbox(resids, lags=lag)
-            Qpval = LBqtest[1][-1]
-            if Qpval <= 0.05 and self.star:
-                rm[0] = qtest_string(rm[0])
+
 
 
             min_idx = np.argmin(pls['Val RMSE'])
@@ -174,12 +153,7 @@ class Postdata:
                 pvalue = dm_r[1]
                 if pvalue <= 0.05 and self.star:
                     rm[2] = '{}*'.format(round(rm[2], 4))
-            resids = y - forecastedy
-            lag = int(math.sqrt(len(y)))
-            LBqtest = sm.stats.diagnostic.acorr_ljungbox(resids, lags=lag)
-            Qpval = LBqtest[1][-1]
-            if Qpval <= 0.05 and self.star:
-                rm[2] = qtest_string(rm[2])
+
 
             i = i + 1
 
@@ -202,12 +176,7 @@ class Postdata:
                 pvalue = dm_r[1]
                 if pvalue <= 0.05 and self.star:
                     rm[1 + skip2] = '{}*'.format(rm[1 + skip2])
-            resids = y - forecastedy
-            lag = int(math.sqrt(len(y)))
-            LBqtest = sm.stats.diagnostic.acorr_ljungbox(resids, lags=lag)
-            Qpval = LBqtest[1][-1]
-            if Qpval <= 0.05 and self.star:
-                rm[1+skip2] = qtest_string(rm[1+skip2])
+
 
             min_AIC_idx = np.argmin(aic['AIC_t'])
             pm[0 + skip, 0] = aic['m'][min_AIC_idx]
@@ -221,12 +190,7 @@ class Postdata:
                 pvalue = dm_r[1]
                 if pvalue <= 0.05 and self.star:
                     rm[0 + skip2] = '{}*'.format(round(rm[0 + skip2], 4))
-            resids = y - forecastedy
-            lag = int(math.sqrt(len(y)))
-            LBqtest = sm.stats.diagnostic.acorr_ljungbox(resids, lags=lag)
-            Qpval = LBqtest[1][-1]
-            if Qpval <= 0.05 and self.star:
-                qtest_string(rm[0+skip2])
+
 
             min_idx = np.argmin(pls['Val RMSE'])
             pm[2 + skip, 0] = pls['m'][min_idx]
@@ -240,12 +204,7 @@ class Postdata:
                 pvalue = dm_r[1]
                 if pvalue <= 0.05 and self.star:
                     rm[2 + skip2] = '{}*'.format(round(rm[2 + skip2], 4))
-            resids = y - forecastedy
-            lag = int(math.sqrt(len(y)))
-            LBqtest = sm.stats.diagnostic.acorr_ljungbox(resids, lags=lag)
-            Qpval = LBqtest[1][-1]
-            if Qpval <= 0.05 and self.star:
-                rm[2 + skip2] =qtest_string(rm[2+skip2])
+
 
             i = i + 1
 
@@ -268,12 +227,7 @@ class Postdata:
                 pvalue = dm_r[1]
                 if pvalue <= 0.05 and self.star:
                     rm[1 + skip2] = '{}*'.format(round(rm[1 + skip2], 4))
-            resids = y - forecastedy
-            lag = int(math.sqrt(len(y)))
-            LBqtest = sm.stats.diagnostic.acorr_ljungbox(resids, lags=lag)
-            Qpval = LBqtest[1][-1]
-            if Qpval <= 0.05 and self.star:
-                rm[1 + skip2] =qtest_string(rm[1+skip2])
+
 
             min_AIC_idx = np.argmin(aic['AIC_t'])
             pm[0 + skip, 0] = aic['m'][min_AIC_idx]
@@ -287,12 +241,7 @@ class Postdata:
                 pvalue = dm_r[1]
                 if pvalue <= 0.05 and self.star:
                     rm[0 + skip2] = '{}*'.format(round(rm[0 + skip2], 4))
-            resids = y - forecastedy
-            lag = int(math.sqrt(len(y)))
-            LBqtest = sm.stats.diagnostic.acorr_ljungbox(resids, lags=lag)
-            Qpval = LBqtest[1][-1]
-            if Qpval <= 0.05 and self.star:
-                rm[0 + skip2] =qtest_string(rm[0+skip2])
+
 
             min_idx = np.argmin(pls['Val RMSE'])
             pm[2 + skip, 0] = pls['m'][min_idx]
@@ -306,12 +255,7 @@ class Postdata:
                 pvalue = dm_r[1]
                 if pvalue <= 0.05 and self.star:
                     rm[2 + skip2] = '{}*'.format(round(rm[2 + skip2], 4))
-            resids = y - forecastedy
-            lag = int(math.sqrt(len(y)))
-            LBqtest = sm.stats.diagnostic.acorr_ljungbox(resids, lags=lag)
-            Qpval = LBqtest[1][-1]
-            if Qpval <= 0.05 and self.star:
-                rm[2 + skip2] =qtest_string(rm[2+skip2])
+
 
             i = i + 1
 
@@ -362,12 +306,7 @@ class Postdata:
                     pvalue = dm_r[1]
                     if pvalue <= 0.05 and self.star:
                         rm[t_idx] = '{}*'.format(round(rm[t_idx], 4))
-                resids = y - y_combi_hat
-                lag = int(math.sqrt(len(y)))
-                LBqtest = sm.stats.diagnostic.acorr_ljungbox(resids, lags=lag)
-                Qpval = LBqtest[1][-1]
-                if Qpval <= 0.05 and self.star:
-                    rm[t_idx] =qtest_string(rm[t_idx])
+
 
                 # AWA
                 type = 'AIC_t'
@@ -386,12 +325,7 @@ class Postdata:
                     pvalue = dm_r[1]
                     if pvalue <= 0.05 and self.star:
                         rm[t_idx] = '{}*'.format(round(rm[t_idx], 4))
-                resids = y - y_combi_hat
-                lag = int(math.sqrt(len(y)))
-                LBqtest = sm.stats.diagnostic.acorr_ljungbox(resids, lags=lag)
-                Qpval = LBqtest[1][-1]
-                if Qpval <= 0.05 and self.star:
-                    rm[t_idx] =qtest_string(rm[t_idx])
+
 
                 # BWA
                 type = 'BIC_t'
@@ -410,12 +344,7 @@ class Postdata:
                     pvalue = dm_r[1]
                     if pvalue <= 0.05 and self.star:
                         rm[t_idx] = '{}*'.format(round(rm[t_idx], 4))
-                resids = y - y_combi_hat
-                lag = int(math.sqrt(len(y)))
-                LBqtest = sm.stats.diagnostic.acorr_ljungbox(resids, lags=lag)
-                Qpval = LBqtest[1][-1]
-                if Qpval <= 0.05 and self.star:
-                    rm[t_idx] =qtest_string(rm[t_idx])
+
 
                 # GR
                 t_idx = 6 + 7 * skip_idx
@@ -453,12 +382,7 @@ class Postdata:
                     pvalue = dm_r[1]
                     if pvalue <= 0.05 and self.star:
                         rm[t_idx] = '{}*'.format(round(rm[t_idx], 4))
-                resids = y - y_combi_hat
-                lag = int(math.sqrt(len(y)))
-                LBqtest = sm.stats.diagnostic.acorr_ljungbox(resids, lags=lag)
-                Qpval = LBqtest[1][-1]
-                if Qpval <= 0.05 and self.star:
-                    rm[t_idx] =qtest_string(rm[t_idx])
+
 
                 i = i + 1
         i = 0
@@ -480,12 +404,7 @@ class Postdata:
                 pvalue = dm_r[1]
                 if pvalue <= 0.05 and self.star:
                     rm[21] = '{}*'.format(round(rm[21], 4))
-            resids = y - y_combi_hat
-            lag = int(math.sqrt(len(y)))
-            LBqtest = sm.stats.diagnostic.acorr_ljungbox(resids, lags=lag)
-            Qpval = LBqtest[1][-1]
-            if Qpval <= 0.05 and self.star:
-                rm[21] =qtest_string(rm[21])
+
 
             # GR
             y_hat_pls = np.concatenate((pca_y_hat_pls, umap_y_hat_pls), axis=0)
@@ -520,12 +439,7 @@ class Postdata:
                 pvalue = dm_r[1]
                 if pvalue <= 0.05 and self.star:
                     rm[22] = '{}*'.format(round(rm[22], 4))
-            resids = y - y_combi_hat
-            lag = int(math.sqrt(len(y)))
-            LBqtest = sm.stats.diagnostic.acorr_ljungbox(resids, lags=lag)
-            Qpval = LBqtest[1][-1]
-            if Qpval <= 0.05 and self.star:
-                rm[22] =qtest_string(rm[22])
+
 
             i = i + 1
 
