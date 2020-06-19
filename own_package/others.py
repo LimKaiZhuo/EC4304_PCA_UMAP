@@ -1,5 +1,6 @@
 import numpy as np
 import openpyxl
+from openpyxl.utils.dataframe import dataframe_to_rows
 
 import os
 
@@ -29,6 +30,39 @@ def create_results_directory(results_directory, folders=['plots', 'models'], exc
 
     print('Creating new results directory: {}'.format(results_directory))
     return results_directory
+
+
+def create_excel_file(excel_name):
+    while os.path.isfile(excel_name):
+        expand = 1
+        while True:
+            expand += 1
+            new_file_name = excel_name.split('.xlsx')[0] + ' - ' + str(expand) + '.xlsx'
+            if os.path.isfile(new_file_name):
+                continue
+            else:
+                excel_name = new_file_name
+                break
+    print('Writing into' + excel_name + '\n')
+    wb = openpyxl.Workbook()
+    wb.save(excel_name)
+    return excel_name
+
+
+def print_df_to_excel(df, ws, start_row=1, start_col=1, index=True, header=True):
+    rows = list(dataframe_to_rows(df, index=index, header=header))
+    rows.pop(1)
+    for r_idx, row in enumerate(rows, start_row):
+        skip_count = 0
+        for c_idx, value in enumerate(row, start_col):
+            if isinstance(value, str):
+                if 'Unnamed' not in value:
+                    ws.cell(row=r_idx - skip_count, column=c_idx, value=value)
+            else:
+                ws.cell(row=r_idx - skip_count, column=c_idx, value=value)
+        else:
+            skip_count += 1
+
 
 def print_array_to_excel(array, first_cell, ws, axis=2):
     '''

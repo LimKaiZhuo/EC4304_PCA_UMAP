@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
-import copy, math
+import copy, math, pickle
 import time, itertools
 from scipy.interpolate import interp1d
 from sklearn.decomposition import PCA
@@ -10,9 +10,8 @@ from sklearn.metrics import mean_squared_error
 from scipy.linalg import eigh
 from openpyxl.utils.dataframe import dataframe_to_rows
 import openpyxl
-import statsmodels.api as sm
-from own_package.others import print_array_to_excel
 import umap
+import statsmodels.api as sm
 
 
 def read_excel_data(excel_dir):
@@ -51,6 +50,148 @@ def read_excel_dataloader(excel_dir):
     return (x, x_names, yo, yo_names, y, y_names, time_stamp)
 
 
+def hparam_selection(fl, model, type, bounds_m, bounds_p, h, h_idx, h_max, r, results_dir, extension=False,
+                     rolling=False, **kwargs):
+    if extension:
+        m_init = list(range(bounds_m[0], bounds_m[1] + 1))
+        p_init = list(range(bounds_p[0], bounds_p[1] + 1))
+
+        h_param_init = list(itertools.product(m_init, p_init))
+
+        m_cancel = list(range(1, 3 + 1))
+        p_cancel = list(range(1, 6 + 1))
+
+        h_param_cancel = list(itertools.product(m_cancel, p_cancel))
+
+        hparams_store = [x for x in h_param_init if x not in h_param_cancel]
+    else:
+        m_store = list(range(bounds_m[0], bounds_m[1] + 1))
+        p_store = list(range(bounds_p[0], bounds_p[1] + 1))
+        hparams_store = list(itertools.product(m_store, p_store))
+
+    rmse_store = []
+    aic_t_store = []
+    bic_t_store = []
+    y_hat_store = []
+
+    m_max = bounds_m[1]
+    p_max = bounds_p[1]
+
+    if model == 'PCA' or model == 'UMAP':
+        if model == 'PCA':
+            factor_model = fl.pca_factor_estimation
+        else:
+            factor_model = fl.umap_factor_estimation
+
+        if type == 'PLS':
+            for m, p in hparams_store:
+                y_hat, _, rmse, results_t = fl.pls_expanding_window(h=h, m=m, p=p, r=r,
+                                                                    factor_model=factor_model,
+                                                                    x_t=fl.x_t, yo_t=fl.yo_t,
+                                                                    y_t=fl.y_t[:, h_idx][..., None],
+                                                                    x_v=fl.x_v, yo_v=fl.yo_v,
+                                                                    y_v=fl.y_v[:, h_idx][..., None],
+                                                                    rolling=rolling)
+
+                rmse_store.append(rmse)
+                aic_t_store.append(results_t.aic)
+                bic_t_store.append(results_t.bic)
+                y_hat_store.append(y_hat)
+            df = pd.DataFrame(data=np.concatenate((np.array(hparams_store),
+                                                   np.array(rmse_store)[..., None],
+                                                   np.array(aic_t_store)[..., None],
+                                                   np.array(bic_t_store)[..., None],
+                                                   np.array(y_hat_store)), axis=1),
+                              columns=['m', 'p', 'Val RMSE', 'AIC_t', 'BIC_t'] + fl.y_v[:,
+                                                                                 h_idx].flatten().tolist())
+
+
+        elif type == 'AIC_BIC':
+            for m, p in hparams_store:
+                aic, bic = fl.aic_bic_for_pca_umap(h=h, m=m, p=p, r=r, h_max=h_max, m_max=m_max, p_max=p_max,
+                                                   factor_model=factor_model,
+                                                   x=fl.x, yo=fl.yo, y=fl.y[:, h_idx][..., None])
+                rmse_store.append(-1)
+                aic_t_store.append(aic)
+                bic_t_store.append(bic)
+            df = pd.DataFrame(data=np.concatenate((np.array(hparams_store),
+                                                   np.array(rmse_store)[..., None],
+                                                   np.array(aic_t_store)[..., None],
+                                                   np.array(bic_t_store)[..., None]), axis=1),
+                              columns=['m', 'p', 'Val RMSE', 'AIC_t', 'BIC_t'])
+
+    elif model == 'AR':
+        if type == 'PLS':
+            for m, p in hparams_store:
+                y_hat, _, rmse, results_t = fl.ar_pls_expanding_window(h=h, p=p, r=r, yo_t=fl.yo_t,
+                                                                       y_t=fl.y_t[:, h_idx][..., None],
+                                                                       yo_v=fl.yo_v,
+                                                                       y_v=fl.y_v[:, h_idx][..., None],
+                                                                       rolling=rolling)
+
+                rmse_store.append(rmse)
+                aic_t_store.append(results_t.aic)
+                bic_t_store.append(results_t.bic)
+                y_hat_store.append(y_hat)
+            df = pd.DataFrame(data=np.concatenate((np.array(hparams_store),
+                                                   np.array(rmse_store)[..., None],
+                                                   np.array(aic_t_store)[..., None],
+                                                   np.array(bic_t_store)[..., None],
+                                                   np.array(y_hat_store)), axis=1),
+                              columns=['m', 'p', 'Val RMSE', 'AIC_t', 'BIC_t'] + fl.y_v[:, h_idx].flatten().tolist())
+
+
+        elif type == 'AIC_BIC':
+            for m, p in hparams_store:
+                aic, bic = fl.aic_bic_for_ar(h=h, p=p, r=r, h_max=h_max, p_max=p_max, yo=fl.yo,
+                                             y=fl.y[:, h_idx][..., None])
+                rmse_store.append(-1)
+                aic_t_store.append(aic)
+                bic_t_store.append(bic)
+            df = pd.DataFrame(data=np.concatenate((np.array(hparams_store),
+                                                   np.array(rmse_store)[..., None],
+                                                   np.array(aic_t_store)[..., None],
+                                                   np.array(bic_t_store)[..., None]), axis=1),
+                              columns=['m', 'p', 'Val RMSE', 'AIC_t', 'BIC_t'])
+    elif model == 'CW' or model == 'CWd':
+        cw_model_class = kwargs['cw_model_class']
+        cw_hparams = kwargs['cw_hparams']
+        if type == 'PLS':
+            for m, p in hparams_store:
+                y_hat, _, rmse = fl.pls_expanding_window(h=h, p=p, m=m,
+                                                         cw_model_class=cw_model_class,
+                                                         cw_hparams=cw_hparams,
+                                                         x_t=fl.x_t,
+                                                         x_v=fl.x_v,
+                                                         yo_t=fl.yo_t,
+                                                         y_t=fl.y_t[:, h_idx][..., None],
+                                                         yo_v=fl.yo_v,
+                                                         y_v=fl.y_v[:, h_idx][..., None],
+                                                         rolling=rolling,
+                                                         save_dir=results_dir,
+                                                         save_name=model)
+
+                rmse_store.append(rmse)
+                y_hat_store.append(y_hat)
+
+            aic_t_store = [np.nan] * len(rmse_store)
+            bic_t_store = [np.nan] * len(rmse_store)
+            df = pd.DataFrame(data=np.concatenate((np.array(hparams_store),
+                                                   np.array(rmse_store)[..., None],
+                                                   np.array(aic_t_store)[..., None],
+                                                   np.array(bic_t_store)[..., None],
+                                                   np.array(y_hat_store)), axis=1),
+                              columns=['m', 'p', 'Val RMSE', 'AIC_t', 'BIC_t'] + fl.y_v[:, h_idx].flatten().tolist())
+
+
+        elif type == 'AIC_BIC':
+            raise KeyError('CW model selected. AIC_BIC method not available for CW model.')
+    else:
+        raise KeyError('Factor model selected is not available.')
+
+    return df
+
+
 class Fl_master:
     def __init__(self, x, yo, time_stamp, features_names, labels_names, y=None, y_names=None, time_idx=None):
         self.x = x  # 2D ndarray. The _o stands for original dataset for features and labels.
@@ -72,6 +213,8 @@ class Fl_master:
 
         pass
 
+    '''
+    NOT USED
     def y_h_step_transformation(self, h_steps):
         y_store = []
 
@@ -89,8 +232,7 @@ class Fl_master:
                 raise KeyError('Label type is not 5 or 6')
 
         self.yo = self.yo * 1200
-
-        pass
+    '''
 
     def iterated_em(self, features, labels, pca_p, max_iter, tol, excel_dir):
         all_x = np.concatenate((features, labels), axis=1)
@@ -142,6 +284,24 @@ class Fl_master:
 
         wb.save(excel_dir)
         return all_x
+
+    def percentage_split(self, percentage):
+        idx_split = round(self.nobs * (1 - percentage))
+        return (self.x[:idx_split, :], self.x[idx_split:, :]), \
+               (self.yo[:idx_split, :], self.yo[idx_split:, :]), \
+               (self.y[:idx_split, :], self.y[idx_split:, :]), \
+               (self.time_stamp[:idx_split], self.time_stamp[idx_split:]), \
+               (self.time_idx[:idx_split], self.time_idx[idx_split:]), \
+               (idx_split, self.nobs - idx_split)
+
+
+class Fl_pca(Fl_master):
+    def __init__(self, val_split, y, **kwargs):
+        super(Fl_pca, self).__init__(**kwargs)
+        self.val_split = val_split
+        self.y = y
+        (self.x_t, self.x_v), (self.yo_t, self.yo_v), (self.y_t, self.y_v), \
+        (self.ts_t, self.ts_v), (self.tidx_t, self.tidx_v), (self.nobs_t, self.nobs_v) = self.percentage_split(0.2)
 
     def pca_factor_estimation(self, x, r, x_transformed_already=False):
         if not x_transformed_already:
@@ -205,15 +365,6 @@ class Fl_master:
         c_nt = min(self.nobs, self.N)
         return math.log(v) + k * ((self.nobs + self.N) / (self.nobs * self.N)) * math.log(c_nt)
 
-    def percentage_split(self, percentage):
-        idx_split = round(self.nobs * (1 - percentage))
-        return (self.x[:idx_split, :], self.x[idx_split:, :]), \
-               (self.yo[:idx_split, :], self.yo[idx_split:, :]), \
-               (self.y[:idx_split, :], self.y[idx_split:, :]), \
-               (self.time_stamp[:idx_split], self.time_stamp[idx_split:]), \
-               (self.time_idx[:idx_split], self.time_idx[idx_split:]), \
-               (idx_split, self.nobs - idx_split)
-
     def pca_umap_prepare_data_matrix(self, factors, yo, y, h, m, p):
         '''
 
@@ -245,6 +396,8 @@ class Fl_master:
 
         return ff, fy, y, x_idx, y_idx
 
+    '''
+    NOT IN USE
     def prepare_data_vector(self, f, yo, m, p):
         v = f[-1, :][None, ...]
 
@@ -263,46 +416,51 @@ class Fl_master:
             return x_v, yo_v, y_v
         else:
             return x_v[:-(h-1), :], yo_v[:-(h-1), :], y_v[h-1:]
+    '''
 
     def pls_expanding_window(self, h, m, p, r, factor_model, x_t, yo_t, y_t, x_v, yo_v, y_v, rolling=False):
         y_hat_store = []
         e_hat_store = []
 
-        x_v, yo_v, y_v = self.prepare_validation_data_h_step_ahead(x_v, yo_v, y_v, h)
+        # x_v, yo_v, y_v = self.prepare_validation_data_h_step_ahead(x_v, yo_v, y_v, h)
         n_val = np.shape(x_v)[0]
 
         # Training on train set first
         f_t, _ = factor_model(x=x_t, r=r)
-        f_LM_t, yo_LM_t, y_t, x_idx_t, y_idx_t = self.pca_umap_prepare_data_matrix(f_t, yo_t, y_t, h, m, p)
-        ols_model = sm.OLS(endog=y_t, exog=sm.add_constant(np.concatenate((f_LM_t, yo_LM_t), axis=1)))
+        f_LM_t, yo_LM_t, y_RO_t, x_idx_t, y_idx_t = self.pca_umap_prepare_data_matrix(f_t, yo_t, y_t, h, m, p)
+        ols_model = sm.OLS(endog=y_RO_t, exog=sm.add_constant(np.concatenate((f_LM_t, yo_LM_t), axis=1)))
 
         ols_model = ols_model.fit()
         results_t = copy.deepcopy(ols_model)
 
         for idx, (x_1, yo_1, y_1) in enumerate(zip(x_v.tolist(), yo_v.tolist(), y_v.tolist())):
-            v = self.prepare_data_vector(f=f_t, yo=yo_t, m=m, p=p)
-            y_1_hat = ols_model.predict(exog=np.concatenate((np.ones((1, 1)), v), axis=1))
+            x_t = np.concatenate((x_t, np.array(x_1)[None, ...]), axis=0)
+            yo_t = np.concatenate((yo_t, np.array(yo_1)[None, ...]), axis=0)
+            y_t = np.concatenate((y_t, np.array(y_1)[None, ...]), axis=0)
+            f_t = np.concatenate((f_t, np.zeros((1, f_t.shape[1]))), axis=0)
+
+            # f_t, _ = factor_model(x=x_t, r=r) SHOULD NOT RE-ESTIMATE FACTORS BEFORE FORECASTING
+            f_LM_t, yo_LM_t, y_RO_t, x_idx_t, y_idx_t = self.pca_umap_prepare_data_matrix(f_t, yo_t, y_t, h, m, p)
+            exog = np.concatenate((f_LM_t, yo_LM_t), axis=1)[-1, :][None, ...]
+
+            y_1_hat = ols_model.predict(exog=np.concatenate((np.ones((1, 1)), exog), axis=1))
             e_1_hat = y_1 - y_1_hat
 
             y_hat_store.append(y_1_hat.item())
             e_hat_store.append(e_1_hat.item())
 
-            x_t = np.concatenate((x_t, np.array(x_1)[None, ...]), axis=0)
-            yo_t = np.concatenate((yo_t, np.array(yo_1)[None, ...]), axis=0)
-            y_t = np.concatenate((y_t, np.array(y_1)[None, ...]), axis=0)
-
-            if rolling:
-                # Drop the first observation in the matrix for rolling window
-                x_t = x_t[1:,:]
-                yo_t = yo_t[1:,:]
-                y_t = y_t[1:,:]
-
             if idx + 1 == n_val:
                 break  # since last iteration, no need to waste time re-estimating model
 
-            f_t, _ = factor_model(x=x_t, r=r)
-            f_LM_t, yo_LM_t, y_t, x_idx_t, y_idx_t = self.pca_umap_prepare_data_matrix(f_t, yo_t, y_t, h, m, p)
-            ols_model = sm.OLS(endog=y_t, exog=sm.add_constant(np.concatenate((f_LM_t, yo_LM_t), axis=1)))
+            if rolling:
+                # Drop the first observation in the matrix for rolling window
+                x_t = x_t[1:, :]
+                yo_t = yo_t[1:, :]
+                y_t = y_t[1:, :]
+                f_t, _ = factor_model(x=x_t, r=r)
+                f_LM_t, yo_LM_t, y_RO_t, x_idx_t, y_idx_t = self.pca_umap_prepare_data_matrix(f_t, yo_t, y_t, h, m, p)
+
+            ols_model = sm.OLS(endog=y_RO_t, exog=sm.add_constant(np.concatenate((f_LM_t, yo_LM_t), axis=1)))
             ols_model = ols_model.fit()
 
         return y_hat_store, e_hat_store, math.sqrt(np.mean(np.array(e_hat_store) ** 2)), results_t
@@ -321,6 +479,34 @@ class Fl_master:
         ols_model = sm.OLS(endog=y, exog=sm.add_constant(np.concatenate((f_LM, yo_LM), axis=1)))
         ols_model = ols_model.fit()
         return ols_model.aic, ols_model.bic
+
+    def pca_k_selection(self, lower_k=5, upper_k=100):
+        ic_store = []
+        x = self.x
+        x_scaler = StandardScaler()
+        x_scaler.fit(x)
+        x = x_scaler.transform(x)
+
+        # Training phase. First get best k value for factor estimation using IC criteria
+        k_store = list(range(lower_k, upper_k + 1))
+        for k in k_store:
+            factors, loadings_T = self.pca_factor_estimation(x=x, r=k, x_transformed_already=True)
+            ic_store.append(self.ic_value(x=x, factors=factors, loadings_T=loadings_T, x_transformed_already=True))
+
+        r = k_store[np.argmin(ic_store)]
+
+        print('Training results: Optimal factor dimension r = {}'.format(r))
+
+        return r, ic_store
+
+
+class Fl_ar(Fl_master):
+    def __init__(self, val_split, y, **kwargs):
+        super(Fl_ar, self).__init__(**kwargs)
+        self.val_split = val_split
+        self.y = y
+        (self.x_t, self.x_v), (self.yo_t, self.yo_v), (self.y_t, self.y_v), \
+        (self.ts_t, self.ts_v), (self.tidx_t, self.tidx_v), (self.nobs_t, self.nobs_v) = self.percentage_split(0.2)
 
     def ar_prepare_data_matrix(self, yo, y, h, p):
         '''
@@ -347,6 +533,8 @@ class Fl_master:
 
         return fy, y, y_idx
 
+    '''
+    NOT IN USE
     def ar_prepare_data_vector(self, yo, p):
         v = yo[-1, :][None, ...]
 
@@ -361,41 +549,50 @@ class Fl_master:
             return yo_v, y_v
         else:
             return yo_v[:-(h-1), :], y_v[h-1:]
+    '''
 
     def ar_pls_expanding_window(self, h, p, r, yo_t, y_t, yo_v, y_v, rolling=False):
         y_hat_store = []
         e_hat_store = []
 
-        yo_v, y_v = self.ar_prepare_validation_data_h_step_ahead(yo_v, y_v, h)
+        # yo_v, y_v = self.ar_prepare_validation_data_h_step_ahead(yo_v, y_v, h)
         n_val = np.shape(yo_v)[0]
 
-        # Training on train set first
-        yo_LM_t, y_t, y_idx_t = self.ar_prepare_data_matrix(yo_t, y_t, h, p)
-        ols_model = sm.OLS(endog=y_t, exog=sm.add_constant(yo_LM_t))
+        # Training on train set first.
+        # yo = information set for original y. As new information comes in, append to this matrix.
+        # y = information set for transformed y to be forecasted.
+        # yo_LM_t = original y lag matrix for training dataset
+        # y_RO_t = y regression output for training dataset
+        yo_LM_t, y_RO_t, y_idx_t = self.ar_prepare_data_matrix(yo_t, y_t, h, p)
+        ols_model = sm.OLS(endog=y_RO_t, exog=sm.add_constant(yo_LM_t))
 
         ols_model = ols_model.fit()
         results_t = copy.deepcopy(ols_model)
 
         for idx, (yo_1, y_1) in enumerate(zip(yo_v.tolist(), y_v.tolist())):
-            v = self.ar_prepare_data_vector(yo=yo_t, p=p)
-            y_1_hat = ols_model.predict(exog=np.concatenate((np.ones((1, 1)), v), axis=1))
+            yo_t = np.concatenate((yo_t, np.array(yo_1)[None, ...]), axis=0)
+            y_t = np.concatenate((y_t, np.array(y_1)[None, ...]), axis=0)
+
+            yo_LM_t, y_RO_t, y_idx_t = self.ar_prepare_data_matrix(yo_t, y_t, h, p)
+            exog = yo_LM_t[-1, :][None, ...]
+
+            y_1_hat = ols_model.predict(exog=np.concatenate((np.ones((1, 1)), exog), axis=1))
             e_1_hat = y_1 - y_1_hat
 
             y_hat_store.append(y_1_hat.item())
             e_hat_store.append(e_1_hat.item())
 
-            yo_t = np.concatenate((yo_t, np.array(yo_1)[None, ...]), axis=0)
-            y_t = np.concatenate((y_t, np.array(y_1)[None, ...]), axis=0)
-
-            if rolling:
-                yo_t = yo_t[1:,:]
-                y_t = y_t[1:,:]
-
             if idx + 1 == n_val:
                 break  # since last iteration, no need to waste time re-estimating model
 
-            yo_LM_t, y_t, y_idx_t = self.ar_prepare_data_matrix(yo_t, y_t, h, p)
-            ols_model = sm.OLS(endog=y_t, exog=sm.add_constant(yo_LM_t))
+            if rolling:
+                yo_t = yo_t[1:, :]
+                y_t = y_t[1:, :]
+                yo_LM_t = yo_LM_t[1:, :]
+                y_RO_t = y_RO_t[1:, :]
+
+            # yo_LM_t, y_t, y_idx_t = self.ar_prepare_data_matrix(yo_t, y_t, h, p)
+            ols_model = sm.OLS(endog=y_RO_t, exog=sm.add_constant(yo_LM_t))
             ols_model = ols_model.fit()
 
         return y_hat_store, e_hat_store, math.sqrt(np.mean(np.array(e_hat_store) ** 2)), results_t
@@ -414,141 +611,174 @@ class Fl_master:
         return ols_model.aic, ols_model.bic
 
 
-class Fl_pca(Fl_master):
+class Fl_cw(Fl_master):
     def __init__(self, val_split, y, **kwargs):
-        super(Fl_pca, self).__init__(**kwargs)
+        super().__init__(**kwargs)
         self.val_split = val_split
         self.y = y
         (self.x_t, self.x_v), (self.yo_t, self.yo_v), (self.y_t, self.y_v), \
         (self.ts_t, self.ts_v), (self.tidx_t, self.tidx_v), (self.nobs_t, self.nobs_v) = self.percentage_split(0.2)
 
+    def prepare_data_matrix(self, z, yo, y, h, m, p):
         '''
-        r = self.pca_k_selection(lower_k=5, upper_k=30)
+
+        :param z: 2D ndarray of factors. observation x dimension = N x r
+        :param y: 2D ndarray of y observation values. N x 1
+        :param l: 2D ndarray of target y labels. Either same as y or cumulative difference vector of (N-h) x 1
+        :param h: h steps ahead
+        :param m: number of factor lags
+        :param p: number of AR lags on Y
+        :return: [ff, fy, l] = [factors data matrix, y data matrix, labels for target y h step ahead]
         '''
-        r = 15
+        a = max(m, p)
+        T = np.shape(z)[0]
 
-        pass
+        y = y[-T + h + a - 1:, :]
+        ff = z[a - 1:T - h, :]
+        fy = yo[a - 1:T - h, :]
 
-    def pca_k_selection(self, lower_k=5, upper_k=100):
-        ic_store = []
-        x = self.x
-        x_scaler = StandardScaler()
-        x_scaler.fit(x)
-        x = x_scaler.transform(x)
+        if m >= 2:
+            for idx in range(2, m + 1):
+                ff = np.concatenate((ff, z[a - idx + 1 - 1:T - h - idx + 1, :]), axis=1)
 
-        # Training phase. First get best k value for factor estimation using IC criteria
-        k_store = list(range(lower_k, upper_k + 1))
-        for k in k_store:
-            factors, loadings_T = self.pca_factor_estimation(x=x, r=k, x_transformed_already=True)
-            ic_store.append(self.ic_value(x=x, factors=factors, loadings_T=loadings_T, x_transformed_already=True))
+        if p >= 2:
+            for idx in range(2, p + 1):
+                fy = np.concatenate((fy, yo[a - idx + 1 - 1:T - h - idx + 1, :]), axis=1)
 
-        r = k_store[np.argmin(ic_store)]
+        return sm.add_constant(np.concatenate((ff, fy), axis=1)), y
 
-        print('Training results: Optimal factor dimension r = {}'.format(r))
-
-        return r, ic_store
-
-    def hparam_selection(self, model, type, bounds_m, bounds_p, h, h_idx, h_max, r, results_dir, extension=False, rolling=False):
-        if extension:
-            m_init = list(range(bounds_m[0], bounds_m[1] + 1))
-            p_init = list(range(bounds_p[0], bounds_p[1] + 1))
-
-            h_param_init = list(itertools.product(m_init, p_init))
-
-            m_cancel = list(range(1, 3 + 1))
-            p_cancel = list(range(1, 6 + 1))
-
-            h_param_cancel = list(itertools.product(m_cancel, p_cancel))
-
-            hparams_store = [x for x in h_param_init if x not in h_param_cancel]
-        else:
-            m_store = list(range(bounds_m[0], bounds_m[1] + 1))
-            p_store = list(range(bounds_p[0], bounds_p[1] + 1))
-            hparams_store = list(itertools.product(m_store, p_store))
-
-        rmse_store = []
-        aic_t_store = []
-        bic_t_store = []
+    def pls_expanding_window(self, h, m, p, cw_model_class, cw_hparams, x_t, yo_t, y_t, x_v, yo_v, y_v, rolling=False,
+                             save_dir=None, save_name=None):
         y_hat_store = []
+        e_hat_store = []
 
-        m_max = bounds_m[1]
-        p_max = bounds_p[1]
+        n_val = np.shape(x_v)[0]
 
-        if model == 'PCA' or model == 'UMAP':
-            if model == 'PCA':
-                factor_model = self.pca_factor_estimation
-            else:
-                factor_model = self.umap_factor_estimation
+        # Training on train set first
+        z_matrix, y_vec = self.prepare_data_matrix(x_t, yo_t, y_t, h, m, p)
+        cw_model = cw_model_class(z_matrix=z_matrix, y_vec=y_vec, hparams=cw_hparams)
+        cw_model.fit()
+        data_store = [cw_model]
+        with open('{}/{}_h{}_{}.pkl'.format(save_dir, save_name, h, 0), "wb") as file:
+            pickle.dump(data_store, file)
 
-            if type == 'PLS':
-                for m, p in hparams_store:
-                    y_hat, _, rmse, results_t = self.pls_expanding_window(h=h, m=m, p=p, r=r,
-                                                                          factor_model=factor_model,
-                                                                          x_t=self.x_t, yo_t=self.yo_t,
-                                                                          y_t=self.y_t[:, h_idx][..., None],
-                                                                          x_v=self.x_v, yo_v=self.yo_v,
-                                                                          y_v=self.y_v[:, h_idx][..., None],
-                                                                          rolling=rolling)
+        for idx, (x_1, yo_1, y_1) in enumerate(zip(x_v.tolist(), yo_v.tolist(), y_v.tolist())):
+            x_t = np.concatenate((x_t, np.array(x_1)[None, ...]), axis=0)
+            yo_t = np.concatenate((yo_t, np.array(yo_1)[None, ...]), axis=0)
+            y_t = np.concatenate((y_t, np.array(y_1)[None, ...]), axis=0)
 
-                    rmse_store.append(rmse)
-                    aic_t_store.append(results_t.aic)
-                    bic_t_store.append(results_t.bic)
-                    y_hat_store.append(y_hat)
-                df = pd.DataFrame(data=np.concatenate((np.array(hparams_store),
-                                                       np.array(rmse_store)[..., None],
-                                                       np.array(aic_t_store)[..., None],
-                                                       np.array(bic_t_store)[..., None],
-                                                       np.array(y_hat_store)), axis=1),
-                                  columns=['m', 'p', 'Val RMSE', 'AIC_t', 'BIC_t'] + self.y_v[h-1:, h_idx].flatten().tolist())
+            z_matrix, y_vec = self.prepare_data_matrix(x_t, yo_t, y_t, h, m, p)
+            exog = z_matrix[-1:, :]
 
+            y_1_hat = cw_model.predict(exog=exog)
+            e_1_hat = y_1[0] - y_1_hat.item()
 
-            elif type == 'AIC_BIC':
-                for m, p in hparams_store:
-                    aic, bic = self.aic_bic_for_pca_umap(h=h, m=m, p=p, r=r, h_max=h_max, m_max=m_max, p_max=p_max,
-                                                         factor_model=factor_model,
-                                                         x=self.x, yo=self.yo, y=self.y)
-                    rmse_store.append(-1)
-                    aic_t_store.append(aic)
-                    bic_t_store.append(bic)
-                df = pd.DataFrame(data=np.concatenate((np.array(hparams_store),
-                                                       np.array(rmse_store)[..., None],
-                                                       np.array(aic_t_store)[..., None],
-                                                       np.array(bic_t_store)[..., None]), axis=1),
-                                  columns=['m', 'p', 'Val RMSE', 'AIC_t', 'BIC_t'])
+            y_hat_store.append(y_1_hat.item())
+            e_hat_store.append(e_1_hat)
 
-        elif model == 'AR':
-            if type == 'PLS':
-                for m, p in hparams_store:
-                    y_hat, _, rmse, results_t = self.ar_pls_expanding_window(h=h, p=p, r=r, yo_t=self.yo_t,
-                                                                             y_t=self.y_t[:, h_idx][..., None],
-                                                                             yo_v=self.yo_v,
-                                                                             y_v=self.y_v[:, h_idx][..., None],
-                                                                             rolling=rolling)
+            if idx + 1 == n_val:
+                break  # since last iteration, no need to waste time re-estimating model
 
-                    rmse_store.append(rmse)
-                    aic_t_store.append(results_t.aic)
-                    bic_t_store.append(results_t.bic)
-                    y_hat_store.append(y_hat)
-                df = pd.DataFrame(data=np.concatenate((np.array(hparams_store),
-                                                       np.array(rmse_store)[..., None],
-                                                       np.array(aic_t_store)[..., None],
-                                                       np.array(bic_t_store)[..., None],
-                                                       np.array(y_hat_store)), axis=1),
-                                  columns=['m', 'p', 'Val RMSE', 'AIC_t', 'BIC_t'] + self.y_v[h-1:, h_idx].flatten().tolist())
+            if rolling:
+                # Drop the first observation in the matrix for rolling window
+                x_t = x_t[1:, :]
+                yo_t = yo_t[1:, :]
+                y_t = y_t[1:, :]
+                z_matrix, y_vec = self.prepare_data_matrix(x_t, yo_t, y_t, h, m, p)
+
+            cw_model = cw_model_class(z_matrix=z_matrix, y_vec=y_vec, hparams=cw_hparams)
+            cw_model.fit()
+            if save_dir:
+                end = time.time()
+                if (idx) % 5 == 0:
+                    try:
+                        print('Time taken for 5 steps CW PLS is {}'.format(end-start))
+                        with open('{}/{}_h{}_{}.pkl'.format(save_dir, save_name, h, idx), "wb") as file:
+                            pickle.dump(data_store, file)
+                    except:
+                        pass
+                    data_store = []
+                data_store.append(cw_model)
+                start = time.time()
+
+            if idx%5 !=0:
+                with open('{}/{}_h{}_{}.pkl'.format(save_dir, save_name, h, idx), "wb") as file:
+                    pickle.dump(data_store, file)
+        return y_hat_store, e_hat_store, math.sqrt(np.mean(np.array(e_hat_store) ** 2))
 
 
-            elif type == 'AIC_BIC':
-                for m, p in hparams_store:
-                    aic, bic = self.aic_bic_for_ar(h=h, p=p, r=r, h_max=h_max,  p_max=p_max,yo=self.yo, y=self.y)
-                    rmse_store.append(-1)
-                    aic_t_store.append(aic)
-                    bic_t_store.append(bic)
-                df = pd.DataFrame(data=np.concatenate((np.array(hparams_store),
-                                                       np.array(rmse_store)[..., None],
-                                                       np.array(aic_t_store)[..., None],
-                                                       np.array(bic_t_store)[..., None]), axis=1),
-                                  columns=['m', 'p', 'Val RMSE', 'AIC_t', 'BIC_t'])
-        else:
-            raise KeyError('Factor model selected is not available.')
+class Fl_cw_data_store(Fl_master):
+    def __init__(self, val_split, y, **kwargs):
+        super().__init__(**kwargs)
+        self.val_split = val_split
+        self.y = y
+        (self.x_t, self.x_v), (self.yo_t, self.yo_v), (self.y_t, self.y_v), \
+        (self.ts_t, self.ts_v), (self.tidx_t, self.tidx_v), (self.nobs_t, self.nobs_v) = self.percentage_split(0.2)
 
-        return df
+    def prepare_data_matrix(self, z, yo, y, h, m, p):
+        '''
+
+        :param z: 2D ndarray of factors. observation x dimension = N x r
+        :param y: 2D ndarray of y observation values. N x 1
+        :param l: 2D ndarray of target y labels. Either same as y or cumulative difference vector of (N-h) x 1
+        :param h: h steps ahead
+        :param m: number of factor lags
+        :param p: number of AR lags on Y
+        :return: [ff, fy, l] = [factors data matrix, y data matrix, labels for target y h step ahead]
+        '''
+        a = max(m, p)
+        T = np.shape(z)[0]
+
+        y = y[-T + h + a - 1:, :]
+        ff = z[a - 1:T - h, :]
+        fy = yo[a - 1:T - h, :]
+
+        if m >= 2:
+            for idx in range(2, m + 1):
+                ff = np.concatenate((ff, z[a - idx + 1 - 1:T - h - idx + 1, :]), axis=1)
+
+        if p >= 2:
+            for idx in range(2, p + 1):
+                fy = np.concatenate((fy, yo[a - idx + 1 - 1:T - h - idx + 1, :]), axis=1)
+
+        return sm.add_constant(np.concatenate((ff, fy), axis=1)), y
+
+    def predict(self, b_hat_store, exog):
+        y_hat = []
+        for idx in range(b_hat_store.shape[0]):
+            y_hat.append((exog@(np.sum(b_hat_store[:idx+1,:],axis=0))).item())
+        return y_hat
+
+    def pls_expanding_window(self, h, m, p, data_store, x_t, yo_t, y_t, x_v, yo_v, y_v, rolling=False):
+        y_hat_store = []
+        e_hat_store = []
+        n_val = np.shape(x_v)[0]
+
+        for idx, (x_1, yo_1, y_1) in enumerate(zip(x_v.tolist(), yo_v.tolist(), y_v.tolist())):
+            x_t = np.concatenate((x_t, np.array(x_1)[None, ...]), axis=0)
+            yo_t = np.concatenate((yo_t, np.array(yo_1)[None, ...]), axis=0)
+            y_t = np.concatenate((y_t, np.array(y_1)[None, ...]), axis=0)
+
+            z_matrix, y_vec = self.prepare_data_matrix(x_t, yo_t, y_t, h, m, p)
+            exog = z_matrix[-1:, :]
+            try:
+                y_1_hat = np.array(self.predict(b_hat_store=data_store[idx].bhat_new_store, exog=exog))
+            except IndexError:
+                # Initial datastore did not save last few models so list of data store is shorter than validation data
+                break
+            e_1_hat = y_1[0] - y_1_hat
+
+            y_hat_store.append(y_1_hat)
+            e_hat_store.append(e_1_hat)
+
+            if idx + 1 == n_val:
+                break  # since last iteration, no need to waste time re-estimating model
+
+            if rolling:
+                # Drop the first observation in the matrix for rolling window
+                x_t = x_t[1:, :]
+                yo_t = yo_t[1:, :]
+                y_t = y_t[1:, :]
+
+        return y_hat_store, e_hat_store, None
+
