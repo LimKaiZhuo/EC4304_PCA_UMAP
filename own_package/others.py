@@ -4,20 +4,22 @@ from openpyxl.utils.dataframe import dataframe_to_rows
 
 import os
 
-def create_results_directory(results_directory, folders=['plots', 'models'], excels=None):
+def create_results_directory(results_directory, folders=None, excels=None):
     if os.path.exists(results_directory):
         expand = 1
         while True:
             expand += 1
-            new_results_directory = results_directory + str(expand)
+            new_results_directory = results_directory + '_' + str(expand)
             if os.path.exists(new_results_directory):
                 continue
             else:
                 results_directory = new_results_directory
                 break
     os.mkdir(results_directory)
-    for item in folders:
-        os.mkdir(results_directory + '/' + item)
+
+    if folders:
+        for item in folders:
+            os.mkdir(results_directory + '/' + item)
 
     if excels:
         for item in excels:

@@ -1,17 +1,16 @@
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 import copy, math, pickle
 import time, itertools
-from scipy.interpolate import interp1d
-from sklearn.decomposition import PCA
+import concurrent.futures
 from sklearn.preprocessing import StandardScaler
-from sklearn.metrics import mean_squared_error
 from scipy.linalg import eigh
 from openpyxl.utils.dataframe import dataframe_to_rows
 import openpyxl
 import umap
 import statsmodels.api as sm
+
+from own_package.others import create_results_directory
 
 
 def read_excel_data(excel_dir):
@@ -21,7 +20,10 @@ def read_excel_data(excel_dir):
 
     labels = pd.read_excel(excel_dir, sheet_name='labels')
     labels_names = [labels.columns.values.tolist()[0]]
-    label_type = labels.values[1, 0]
+    try:
+        label_type = labels.values[1, 0]
+    except:
+        label_type = None
     labels = labels.values[:, 0][..., None].astype(np.float)
 
     time_stamp = np.copy(features[:, 0])
@@ -32,20 +34,19 @@ def read_excel_data(excel_dir):
 
 def read_excel_dataloader(excel_dir):
     xls = pd.ExcelFile(excel_dir)
-    df = pd.read_excel(xls, 'x')
+    df = pd.read_excel(xls, 'x', index_col=0)
     x_names = df.columns.values
     x = df.values
 
-    df = pd.read_excel(xls, 'yo')
+    df = pd.read_excel(xls, 'yo', index_col=0)
     yo_names = df.columns.values
     yo = df.values
 
-    df = pd.read_excel(xls, 'y')
+    df = pd.read_excel(xls, 'y', index_col=0)
     y_names = df.columns.values
     y = df.values
 
-    df = pd.read_excel(xls, 'time_stamp')
-    time_stamp = df.values
+    time_stamp = df.index.values
 
     return (x, x_names, yo, yo_names, y, y_names, time_stamp)
 
@@ -84,6 +85,7 @@ def hparam_selection(fl, model, type, bounds_m, bounds_p, h, h_idx, h_max, r, re
             factor_model = fl.umap_factor_estimation
 
         if type == 'PLS':
+            data_store_save_dir = create_results_directory('{}/{}_h{}'.format(results_dir, model, h))
             for m, p in hparams_store:
                 y_hat, _, rmse, results_t = fl.pls_expanding_window(h=h, m=m, p=p, r=r,
                                                                     factor_model=factor_model,
@@ -91,7 +93,10 @@ def hparam_selection(fl, model, type, bounds_m, bounds_p, h, h_idx, h_max, r, re
                                                                     y_t=fl.y_t[:, h_idx][..., None],
                                                                     x_v=fl.x_v, yo_v=fl.yo_v,
                                                                     y_v=fl.y_v[:, h_idx][..., None],
-                                                                    rolling=rolling)
+                                                                    rolling=rolling,
+                                                                    save_dir=data_store_save_dir,
+                                                                    save_name=model,
+                                                                    )
 
                 rmse_store.append(rmse)
                 aic_t_store.append(results_t.aic)
@@ -122,12 +127,16 @@ def hparam_selection(fl, model, type, bounds_m, bounds_p, h, h_idx, h_max, r, re
 
     elif model == 'AR':
         if type == 'PLS':
+            data_store_save_dir = create_results_directory('{}/{}_h{}'.format(results_dir, model, h))
             for m, p in hparams_store:
                 y_hat, _, rmse, results_t = fl.ar_pls_expanding_window(h=h, p=p, r=r, yo_t=fl.yo_t,
                                                                        y_t=fl.y_t[:, h_idx][..., None],
                                                                        yo_v=fl.yo_v,
                                                                        y_v=fl.y_v[:, h_idx][..., None],
-                                                                       rolling=rolling)
+                                                                       rolling=rolling,
+                                                                       save_dir=data_store_save_dir,
+                                                                       save_name=model,
+                                                                       )
 
                 rmse_store.append(rmse)
                 aic_t_store.append(results_t.aic)
@@ -153,23 +162,26 @@ def hparam_selection(fl, model, type, bounds_m, bounds_p, h, h_idx, h_max, r, re
                                                    np.array(aic_t_store)[..., None],
                                                    np.array(bic_t_store)[..., None]), axis=1),
                               columns=['m', 'p', 'Val RMSE', 'AIC_t', 'BIC_t'])
-    elif model == 'CW' or model == 'CWd':
+    elif model in ['CW{}'.format(i) for i in range(1, 9)] + ['CWd{}'.format(i) for i in range(1, 9)]:
+        z_type = int(model[-1])
         cw_model_class = kwargs['cw_model_class']
         cw_hparams = kwargs['cw_hparams']
         if type == 'PLS':
             for m, p in hparams_store:
-                y_hat, _, rmse = fl.pls_expanding_window(h=h, p=p, m=m,
-                                                         cw_model_class=cw_model_class,
-                                                         cw_hparams=cw_hparams,
-                                                         x_t=fl.x_t,
-                                                         x_v=fl.x_v,
-                                                         yo_t=fl.yo_t,
-                                                         y_t=fl.y_t[:, h_idx][..., None],
-                                                         yo_v=fl.yo_v,
-                                                         y_v=fl.y_v[:, h_idx][..., None],
-                                                         rolling=rolling,
-                                                         save_dir=results_dir,
-                                                         save_name=model)
+                data_store_save_dir = create_results_directory('{}/{}_h{}'.format(results_dir, model, h))
+                y_hat, _, rmse = fl.multicore_pls_expanding_window(h=h, p=p, m=m, r=r,
+                                                                   cw_model_class=cw_model_class,
+                                                                   cw_hparams=cw_hparams,
+                                                                   x_t=fl.x_t,
+                                                                   x_v=fl.x_v,
+                                                                   yo_t=fl.yo_t,
+                                                                   y_t=fl.y_t[:, h_idx][..., None],
+                                                                   yo_v=fl.yo_v,
+                                                                   y_v=fl.y_v[:, h_idx][..., None],
+                                                                   rolling=rolling,
+                                                                   z_type=z_type,
+                                                                   save_dir=data_store_save_dir,
+                                                                   save_name=model)
 
                 rmse_store.append(rmse)
                 y_hat_store.append(y_hat)
@@ -234,8 +246,23 @@ class Fl_master:
         self.yo = self.yo * 1200
     '''
 
+    def pca_factor_estimation(self, x, r, x_transformed_already=False):
+        if not x_transformed_already:
+            x_scaler = StandardScaler()
+            x_scaler.fit(x)
+            x = x_scaler.transform(x)
+
+        w, v = eigh(x.T @ x)
+        loadings = np.fliplr(v[:, -r:])
+        loadings = loadings * math.sqrt(self.N)
+        factors = x @ loadings / self.N
+        loadings_T = loadings.T
+
+        return factors, loadings_T
+
     def iterated_em(self, features, labels, pca_p, max_iter, tol, excel_dir):
-        all_x = np.concatenate((features, labels), axis=1)
+        # all_x = np.concatenate((features, labels), axis=1)
+        all_x = features
         nan_store = np.where(np.isnan(all_x))
         col_mean = np.nanmean(all_x, axis=0)
         all_x[nan_store] = np.take(col_mean, nan_store[1])
@@ -277,7 +304,7 @@ class Fl_master:
         ws = wb[sheet_name]
 
         df = pd.DataFrame(data=np.concatenate((self.time_stamp[..., None], all_x), axis=1),
-                          columns=self.features_names + self.labels_names)
+                          columns=self.features_names)
 
         for r in dataframe_to_rows(df, index=False, header=True):
             ws.append(r)
@@ -418,7 +445,8 @@ class Fl_pca(Fl_master):
             return x_v[:-(h-1), :], yo_v[:-(h-1), :], y_v[h-1:]
     '''
 
-    def pls_expanding_window(self, h, m, p, r, factor_model, x_t, yo_t, y_t, x_v, yo_v, y_v, rolling=False):
+    def pls_expanding_window(self, h, m, p, r, factor_model, x_t, yo_t, y_t, x_v, yo_v, y_v,
+                             rolling=False, save_dir=None, save_name=None):
         y_hat_store = []
         e_hat_store = []
 
@@ -449,6 +477,18 @@ class Fl_pca(Fl_master):
             y_hat_store.append(y_1_hat.item())
             e_hat_store.append(e_1_hat.item())
 
+            if save_dir:
+                try:
+                    data_store.append({'y_hat': y_1_hat.item(),
+                                       'e_hat': e_1_hat.item(),
+                                       'aic': ols_model.aic,
+                                       'bic': ols_model.bic})
+                except:
+                    data_store = [{'y_hat': y_1_hat.item(),
+                                   'e_hat': e_1_hat.item(),
+                                   'aic': ols_model.aic,
+                                   'bic': ols_model.bic}]
+
             if idx + 1 == n_val:
                 break  # since last iteration, no need to waste time re-estimating model
 
@@ -462,6 +502,10 @@ class Fl_pca(Fl_master):
 
             ols_model = sm.OLS(endog=y_RO_t, exog=sm.add_constant(np.concatenate((f_LM_t, yo_LM_t), axis=1)))
             ols_model = ols_model.fit()
+
+        if save_dir:
+            with open('{}/{}_m{}_p{}_h{}.pkl'.format(save_dir, save_name, m, p, h), "wb") as file:
+                pickle.dump(data_store, file)
 
         return y_hat_store, e_hat_store, math.sqrt(np.mean(np.array(e_hat_store) ** 2)), results_t
 
@@ -551,7 +595,8 @@ class Fl_ar(Fl_master):
             return yo_v[:-(h-1), :], y_v[h-1:]
     '''
 
-    def ar_pls_expanding_window(self, h, p, r, yo_t, y_t, yo_v, y_v, rolling=False):
+    def ar_pls_expanding_window(self, h, p, r, yo_t, y_t, yo_v, y_v, rolling=False,
+                                save_dir=None, save_name=None):
         y_hat_store = []
         e_hat_store = []
 
@@ -582,7 +627,20 @@ class Fl_ar(Fl_master):
             y_hat_store.append(y_1_hat.item())
             e_hat_store.append(e_1_hat.item())
 
+            if save_dir:
+                try:
+                    data_store.append({'y_hat': y_1_hat.item(),
+                                       'e_hat': e_1_hat.item(),
+                                       'aic': ols_model.aic,
+                                       'bic': ols_model.bic})
+                except:
+                    data_store = [{'y_hat': y_1_hat.item(),
+                                   'e_hat': e_1_hat.item(),
+                                   'aic': ols_model.aic,
+                                   'bic': ols_model.bic}]
+
             if idx + 1 == n_val:
+                data_store[-1]['y_check'] = [y_v[0], y_v[-1]]
                 break  # since last iteration, no need to waste time re-estimating model
 
             if rolling:
@@ -594,6 +652,10 @@ class Fl_ar(Fl_master):
             # yo_LM_t, y_t, y_idx_t = self.ar_prepare_data_matrix(yo_t, y_t, h, p)
             ols_model = sm.OLS(endog=y_RO_t, exog=sm.add_constant(yo_LM_t))
             ols_model = ols_model.fit()
+
+        if save_dir:
+            with open('{}/{}_p{}_h{}.pkl'.format(save_dir, save_name, p, h), "wb") as file:
+                pickle.dump(data_store, file)
 
         return y_hat_store, e_hat_store, math.sqrt(np.mean(np.array(e_hat_store) ** 2)), results_t
 
@@ -619,10 +681,10 @@ class Fl_cw(Fl_master):
         (self.x_t, self.x_v), (self.yo_t, self.yo_v), (self.y_t, self.y_v), \
         (self.ts_t, self.ts_v), (self.tidx_t, self.tidx_v), (self.nobs_t, self.nobs_v) = self.percentage_split(0.2)
 
-    def prepare_data_matrix(self, z, yo, y, h, m, p):
+    def prepare_data_matrix(self, x, yo, y, h, m, p, z_type):
         '''
 
-        :param z: 2D ndarray of factors. observation x dimension = N x r
+        :param x: 2D ndarray of x. observation x dimension = N x r
         :param y: 2D ndarray of y observation values. N x 1
         :param l: 2D ndarray of target y labels. Either same as y or cumulative difference vector of (N-h) x 1
         :param h: h steps ahead
@@ -630,6 +692,34 @@ class Fl_cw(Fl_master):
         :param p: number of AR lags on Y
         :return: [ff, fy, l] = [factors data matrix, y data matrix, labels for target y h step ahead]
         '''
+        if z_type == 1:
+            z = x
+        elif z_type == 2:
+            z = np.concatenate((x, x ** 2), axis=1)
+        elif z_type == 3:
+            z, _ = self.pca_factor_estimation(x=x, r=8)
+        elif z_type == 4:
+            z, _ = self.pca_factor_estimation(x=x, r=8)
+            z = np.concatenate((z, z ** 2), axis=1)
+        elif z_type == 5:
+            s = pd.DataFrame(x)
+            z = np.array(pd.concat([s, s.shift(), s.shift(2), s.shift(3), s.shift(4)], axis=1))[4:,:]
+            yo = yo[4:,:]
+            y = y[4:,:]
+            z, _ = self.pca_factor_estimation(x=np.concatenate((z, z ** 2), axis=1), r=8)
+        elif z_type == 6:
+            s = pd.DataFrame(x)
+            z = np.array(pd.concat([s, s.shift(), s.shift(2), s.shift(3), s.shift(4)], axis=1))[4:,:]
+            yo = yo[4:,:]
+            y = y[4:,:]
+            z, _ = self.pca_factor_estimation(x=np.concatenate((z, z ** 2), axis=1), r=8)
+            z = np.concatenate((z, z ** 2), axis=1)
+        elif z_type == 7:
+            z, _ = self.pca_factor_estimation(x=np.concatenate((x, x ** 2), axis=1), r=8)
+        elif z_type == 8:
+            z, _ = self.pca_factor_estimation(x=np.concatenate((x, x ** 2), axis=1), r=8)
+            z = np.concatenate((z, z ** 2), axis=1)
+
         a = max(m, p)
         T = np.shape(z)[0]
 
@@ -647,7 +737,8 @@ class Fl_cw(Fl_master):
 
         return sm.add_constant(np.concatenate((ff, fy), axis=1)), y
 
-    def pls_expanding_window(self, h, m, p, cw_model_class, cw_hparams, x_t, yo_t, y_t, x_v, yo_v, y_v, rolling=False,
+    def pls_expanding_window(self, h, m, p, cw_model_class, cw_hparams, x_t, yo_t, y_t, x_v, yo_v, y_v, z_type,
+                             rolling=False,
                              save_dir=None, save_name=None):
         y_hat_store = []
         e_hat_store = []
@@ -655,19 +746,16 @@ class Fl_cw(Fl_master):
         n_val = np.shape(x_v)[0]
 
         # Training on train set first
-        z_matrix, y_vec = self.prepare_data_matrix(x_t, yo_t, y_t, h, m, p)
+        z_matrix, y_vec = self.prepare_data_matrix(x_t, yo_t, y_t, h, m, p, z_type)
         cw_model = cw_model_class(z_matrix=z_matrix, y_vec=y_vec, hparams=cw_hparams)
         cw_model.fit()
-        data_store = [cw_model]
-        with open('{}/{}_h{}_{}.pkl'.format(save_dir, save_name, h, 0), "wb") as file:
-            pickle.dump(data_store, file)
 
         for idx, (x_1, yo_1, y_1) in enumerate(zip(x_v.tolist(), yo_v.tolist(), y_v.tolist())):
             x_t = np.concatenate((x_t, np.array(x_1)[None, ...]), axis=0)
             yo_t = np.concatenate((yo_t, np.array(yo_1)[None, ...]), axis=0)
             y_t = np.concatenate((y_t, np.array(y_1)[None, ...]), axis=0)
 
-            z_matrix, y_vec = self.prepare_data_matrix(x_t, yo_t, y_t, h, m, p)
+            z_matrix, y_vec = self.prepare_data_matrix(x_t, yo_t, y_t, h, m, p, z_type)
             exog = z_matrix[-1:, :]
 
             y_1_hat = cw_model.predict(exog=exog)
@@ -675,6 +763,19 @@ class Fl_cw(Fl_master):
 
             y_hat_store.append(y_1_hat.item())
             e_hat_store.append(e_1_hat)
+
+            if save_dir:
+                end = time.time()
+                if (idx) % 5 == 0:
+                    try:
+                        print('Time taken for 5 steps CW PLS is {}'.format(end - start))
+                        with open('{}/{}_h{}_{}.pkl'.format(save_dir, save_name, h, idx), "wb") as file:
+                            pickle.dump(data_store, file)
+                    except:
+                        pass
+                    data_store = []
+                data_store.append(cw_model.return_data_dict())
+                start = time.time()
 
             if idx + 1 == n_val:
                 break  # since last iteration, no need to waste time re-estimating model
@@ -684,72 +785,65 @@ class Fl_cw(Fl_master):
                 x_t = x_t[1:, :]
                 yo_t = yo_t[1:, :]
                 y_t = y_t[1:, :]
-                z_matrix, y_vec = self.prepare_data_matrix(x_t, yo_t, y_t, h, m, p)
+                z_matrix, y_vec = self.prepare_data_matrix(x_t, yo_t, y_t, h, m, p, z_type)
 
             cw_model = cw_model_class(z_matrix=z_matrix, y_vec=y_vec, hparams=cw_hparams)
             cw_model.fit()
-            if save_dir:
-                end = time.time()
-                if (idx) % 5 == 0:
-                    try:
-                        print('Time taken for 5 steps CW PLS is {}'.format(end-start))
-                        with open('{}/{}_h{}_{}.pkl'.format(save_dir, save_name, h, idx), "wb") as file:
-                            pickle.dump(data_store, file)
-                    except:
-                        pass
-                    data_store = []
-                data_store.append(cw_model)
-                start = time.time()
 
-            if idx%5 !=0:
-                with open('{}/{}_h{}_{}.pkl'.format(save_dir, save_name, h, idx), "wb") as file:
-                    pickle.dump(data_store, file)
+        if idx % 5 != 0:
+            with open('{}/{}_h{}_{}.pkl'.format(save_dir, save_name, h, idx), "wb") as file:
+                pickle.dump(data_store, file)
+
+        return y_hat_store, e_hat_store, math.sqrt(np.mean(np.array(e_hat_store) ** 2))
+
+    def one_step_eval(self, arg, extra):
+        x, yo, y = arg
+        cw_model_class, cw_hparams, h, m, p, r, z_type = extra
+        z_matrix, y_vec = self.prepare_data_matrix(x[:-1, :], yo[:-1, :], y[:-1, :], h, m, p, z_type)
+        cw_model = cw_model_class(z_matrix=z_matrix, y_vec=y_vec, hparams=cw_hparams, r=r)
+        cw_model.fit()
+
+        z_matrix, y_vec = self.prepare_data_matrix(x, yo, y, h, m, p, z_type)
+        exog = z_matrix[-1:, :]
+
+        y_1_hat = cw_model.predict(exog=exog).item()
+        e_1_hat = y[-1].item() - y_1_hat
+
+        return y_1_hat, e_1_hat, cw_model.return_data_dict()
+
+    def multicore_pls_expanding_window(self, h, m, p, r, cw_model_class, cw_hparams, x_t, yo_t, y_t, x_v, yo_v, y_v,
+                                       z_type,
+                                       rolling=False,
+                                       save_dir=None, save_name=None):
+        if z_type < 3:
+            # Only dataset 3,4,5,6,7,8 has factors
+            r = None
+
+        if rolling:
+            args = [
+                [np.concatenate((t[idx:, :], v[:idx + 1, :]), axis=0) for t, v in [[x_t, x_v], [yo_t, yo_v], [y_t, y_v]]
+                 ] for idx in range(x_v.shape[0])]
+        else:
+            args = [[np.concatenate((t, v[:idx + 1, :]), axis=0) for t, v in [[x_t, x_v], [yo_t, yo_v], [y_t, y_v]]
+                     ] for idx in range(x_v.shape[0])]
+
+        with concurrent.futures.ProcessPoolExecutor(max_workers=4) as executer:
+            results = executer.map(self.one_step_eval, args,
+                                   itertools.repeat((cw_model_class, cw_hparams, h, m, p, r, z_type)))
+
+        y_hat_store, e_hat_store, cw_data_store = zip(*list(results))
+
+        with open('{}/{}_h{}_all.pkl'.format(save_dir, save_name, h), "wb") as file:
+            pickle.dump(cw_data_store, file)
+
         return y_hat_store, e_hat_store, math.sqrt(np.mean(np.array(e_hat_store) ** 2))
 
 
-class Fl_cw_data_store(Fl_master):
-    def __init__(self, val_split, y, **kwargs):
-        super().__init__(**kwargs)
-        self.val_split = val_split
-        self.y = y
-        (self.x_t, self.x_v), (self.yo_t, self.yo_v), (self.y_t, self.y_v), \
-        (self.ts_t, self.ts_v), (self.tidx_t, self.tidx_v), (self.nobs_t, self.nobs_v) = self.percentage_split(0.2)
-
-    def prepare_data_matrix(self, z, yo, y, h, m, p):
-        '''
-
-        :param z: 2D ndarray of factors. observation x dimension = N x r
-        :param y: 2D ndarray of y observation values. N x 1
-        :param l: 2D ndarray of target y labels. Either same as y or cumulative difference vector of (N-h) x 1
-        :param h: h steps ahead
-        :param m: number of factor lags
-        :param p: number of AR lags on Y
-        :return: [ff, fy, l] = [factors data matrix, y data matrix, labels for target y h step ahead]
-        '''
-        a = max(m, p)
-        T = np.shape(z)[0]
-
-        y = y[-T + h + a - 1:, :]
-        ff = z[a - 1:T - h, :]
-        fy = yo[a - 1:T - h, :]
-
-        if m >= 2:
-            for idx in range(2, m + 1):
-                ff = np.concatenate((ff, z[a - idx + 1 - 1:T - h - idx + 1, :]), axis=1)
-
-        if p >= 2:
-            for idx in range(2, p + 1):
-                fy = np.concatenate((fy, yo[a - idx + 1 - 1:T - h - idx + 1, :]), axis=1)
-
-        return sm.add_constant(np.concatenate((ff, fy), axis=1)), y
-
+class Fl_cw_data_store(Fl_cw):
     def predict(self, b_hat_store, exog):
-        y_hat = []
-        for idx in range(b_hat_store.shape[0]):
-            y_hat.append((exog@(np.sum(b_hat_store[:idx+1,:],axis=0))).item())
-        return y_hat
+        return np.cumsum(b_hat_store.toarray(), axis=0)@exog.squeeze()
 
-    def pls_expanding_window(self, h, m, p, data_store, x_t, yo_t, y_t, x_v, yo_v, y_v, rolling=False):
+    def pls_expanding_window(self, h, m, p, data_store, x_t, yo_t, y_t, x_v, yo_v, y_v, z_type, rolling=False):
         y_hat_store = []
         e_hat_store = []
         n_val = np.shape(x_v)[0]
@@ -759,10 +853,10 @@ class Fl_cw_data_store(Fl_master):
             yo_t = np.concatenate((yo_t, np.array(yo_1)[None, ...]), axis=0)
             y_t = np.concatenate((y_t, np.array(y_1)[None, ...]), axis=0)
 
-            z_matrix, y_vec = self.prepare_data_matrix(x_t, yo_t, y_t, h, m, p)
+            z_matrix, y_vec = self.prepare_data_matrix(x_t, yo_t, y_t, h, m, p, z_type)
             exog = z_matrix[-1:, :]
             try:
-                y_1_hat = np.array(self.predict(b_hat_store=data_store[idx].bhat_new_store, exog=exog))
+                y_1_hat = np.array(self.predict(b_hat_store=data_store[idx]['bhat_new_store'], exog=exog))
             except IndexError:
                 # Initial datastore did not save last few models so list of data store is shorter than validation data
                 break
@@ -781,4 +875,3 @@ class Fl_cw_data_store(Fl_master):
                 y_t = y_t[1:, :]
 
         return y_hat_store, e_hat_store, None
-

@@ -13,3 +13,4 @@ def selector(case, **kwargs):
     if case == 1:
         run_testing()
 
+selector(case=1)
