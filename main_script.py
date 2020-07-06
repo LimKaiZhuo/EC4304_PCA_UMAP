@@ -2,8 +2,8 @@ import numpy as np
 import pandas as pd
 
 from own_package.features_labels import read_excel_data, read_excel_dataloader, Fl_master, Fl_pca, Fl_ar, \
-    Fl_cw, hparam_selection
-from own_package.boosting import ComponentwiseL2Boost, ComponentwiseL2BoostDropout
+    Fl_cw, Fl_xgb, hparam_selection
+from own_package.boosting import ComponentwiseL2Boost, ComponentwiseL2BoostDropout, Xgboost
 from own_package.others import create_results_directory
 from own_package.pre_processing import type_transformations
 import openpyxl, time
@@ -110,9 +110,9 @@ def selector(case, excel_dir=None, var_name=None):
                               time_stamp=output[6])
         (f_tv, f_tt), (yo_tv, yo_t), (y_tv, y_tt), \
         (ts_tv, ts_tt), (tidx_tv, tidx_tt), (nobs_tv, nobs_tt) = fl_master.percentage_split(0)
-        #f_tv = np.array([list(range(1,21))]*5).T
-        #yo_tv = np.array([list(range(1,21))]).T
-        #y_tv = np.array([list(range(1,21))]*5).T
+        # f_tv = np.array([list(range(1,21))]*5).T
+        # yo_tv = np.array([list(range(1,21))]).T
+        # y_tv = np.array([list(range(1,21))]*5).T
         fl_pca = Fl_pca(val_split=0.2, x=f_tv, yo=yo_tv, y=y_tv,
                         time_stamp=ts_tv, time_idx=tidx_tv,
                         features_names=fl_master.features_names, labels_names=fl_master.labels_names,
@@ -122,17 +122,21 @@ def selector(case, excel_dir=None, var_name=None):
                       features_names=fl_master.features_names, labels_names=fl_master.labels_names,
                       y_names=fl_master.y_names)
         fl_cw = Fl_cw(val_split=0.2, x=f_tv, yo=yo_tv, y=y_tv,
-                        time_stamp=ts_tv, time_idx=tidx_tv,
-                        features_names=fl_master.features_names, labels_names=fl_master.labels_names,
-                        y_names=fl_master.y_names)
-        #h_steps = [6]
-        #h_idx_store = [2]  # h = 1 corresponds to h_idx=0, h=3 is h_idx=1, and so on
-        h_steps = [1,3,6,12,24]
-        h_idx_store = [0,1,2,3,4]
-        #type_store = ['PLS', 'PLS', 'PLS']
-        #model_store = ['CW1']
-        model_store = ['CWd3','CWd4','CWd7','CWd8']
-        #model_store =['CWd5','CWd6']
+                      time_stamp=ts_tv, time_idx=tidx_tv,
+                      features_names=fl_master.features_names, labels_names=fl_master.labels_names,
+                      y_names=fl_master.y_names)
+        fl_xgb = Fl_xgb(val_split=0.2, x=f_tv, yo=yo_tv, y=y_tv,
+                      time_stamp=ts_tv, time_idx=tidx_tv,
+                      features_names=fl_master.features_names, labels_names=fl_master.labels_names,
+                      y_names=fl_master.y_names)
+        # h_steps = [12]
+        # h_idx_store = [3]  # h = 1 corresponds to h_idx=0, h=3 is h_idx=1, and so on
+        h_steps = [1, 3, 6, 12, 24]
+        h_idx_store = [0, 1, 2, 3, 4]
+        # type_store = ['PLS', 'PLS', 'PLS']
+        # model_store = ['CW1']
+        model_store = [f'XGB{x}' for x in [1,2,3,4,5,6,7,8]]
+        # model_store =['CWd5','CWd6']
         type_store = ['PLS'] * len(model_store)
         # type_store = ['AIC_BIC']
         # model_store = ['UMAP']
@@ -155,17 +159,30 @@ def selector(case, excel_dir=None, var_name=None):
                 fl = fl_pca
                 kwargs = {}
             elif model[:-1] == 'CW':
-                bounds_m = [3,3]
-                bounds_p = [12,12]
+                bounds_m = [3, 3]
+                bounds_p = [12, 12]
                 fl = fl_cw
-                kwargs = {'cw_model_class':ComponentwiseL2Boost,
+                kwargs = {'cw_model_class': ComponentwiseL2Boost,
                           'cw_hparams': {'m_max': 1000, 'learning_rate': 0.3, 'ic_mode': 'aic', 'dropout': 0.5}}
             elif model[:-1] == 'CWd':
-                bounds_m = [12,12]
-                bounds_p = [24,24]
+                bounds_m = [3, 3]
+                bounds_p = [12, 12]
                 fl = fl_cw
                 kwargs = {'cw_model_class': ComponentwiseL2BoostDropout,
-                          'cw_hparams': {'m_max': 250, 'learning_rate': 0.3, 'ic_mode': 'aic', 'dropout': 0.5}}
+                          'cw_hparams': {'m_max': 5, 'learning_rate': 0.1, 'ic_mode': 'aic', 'dropout': 0.1}}
+            elif model[:-1] == 'XGB':
+                bounds_m = [3, 3]
+                bounds_p = [12, 12]
+                fl = fl_xgb
+                kwargs = {'cw_model_class': Xgboost,
+                          'cw_hparams': {'booster': 'dart',
+                                         'max_depth': 1,
+                                         'learning_rate': 0.1,
+                                         'objective': 'reg:squarederror',
+                                         'sample_type': 'uniform',
+                                         'normalize_type': 'tree',
+                                         'rate_drop': 0.1,
+                                         'skip_drop': 0.5,}}
             else:
                 raise KeyError('Invalid model mode selected.')
 
@@ -192,10 +209,11 @@ def selector(case, excel_dir=None, var_name=None):
 
     pass
 
+
 if __name__ == '__main__':
     # selector(0)
-    #selector(1)
-    selector(4, excel_dir='./excel/dataset2/CPIAUCSL_data_loader.xlsx', var_name='testset_CPIAm12p24')
+    # selector(1)
+    selector(4, excel_dir='./excel/dataset2/INDPRO_data_loader.xlsx', var_name='testset_INDxgb')
     # selector(3, excel_dir='./excel/DPC_data_loader.xlsx', var_name='DPC')
 
     # selector(3, excel_dir='./excel/WPSFD49207_data_loader.xlsx', var_name='WPSFD49207')

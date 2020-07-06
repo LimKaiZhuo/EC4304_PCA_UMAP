@@ -76,6 +76,7 @@ def cw_analysis(**kwargs):
                                               yo_v=fl.yo_v,
                                               y_v=fl.y_v[:, h_idx][..., None],
                                               z_type=z_type,
+                                              save_dir=results_dir,
                                               rolling=rolling,)
 
     m_star_store = [x['m_star'] for x in data_store]

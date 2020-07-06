@@ -3,6 +3,8 @@ import pandas as pd
 import copy, math, pickle
 import time, itertools
 import concurrent.futures
+import matplotlib.pyplot as plt
+import xgboost as xgb
 from sklearn.preprocessing import StandardScaler
 from scipy.linalg import eigh
 from openpyxl.utils.dataframe import dataframe_to_rows
@@ -162,7 +164,8 @@ def hparam_selection(fl, model, type, bounds_m, bounds_p, h, h_idx, h_max, r, re
                                                    np.array(aic_t_store)[..., None],
                                                    np.array(bic_t_store)[..., None]), axis=1),
                               columns=['m', 'p', 'Val RMSE', 'AIC_t', 'BIC_t'])
-    elif model in ['CW{}'.format(i) for i in range(1, 9)] + ['CWd{}'.format(i) for i in range(1, 9)]:
+    elif model in ['CW{}'.format(i) for i in range(1, 9)] + ['CWd{}'.format(i) for i in range(1, 9)] + [
+        'XGB{}'.format(i) for i in range(1, 9)]:
         z_type = int(model[-1])
         cw_model_class = kwargs['cw_model_class']
         cw_hparams = kwargs['cw_hparams']
@@ -703,15 +706,15 @@ class Fl_cw(Fl_master):
             z = np.concatenate((z, z ** 2), axis=1)
         elif z_type == 5:
             s = pd.DataFrame(x)
-            z = np.array(pd.concat([s, s.shift(), s.shift(2), s.shift(3), s.shift(4)], axis=1))[4:,:]
-            yo = yo[4:,:]
-            y = y[4:,:]
+            z = np.array(pd.concat([s, s.shift(), s.shift(2), s.shift(3), s.shift(4)], axis=1))[4:, :]
+            yo = yo[4:, :]
+            y = y[4:, :]
             z, _ = self.pca_factor_estimation(x=np.concatenate((z, z ** 2), axis=1), r=8)
         elif z_type == 6:
             s = pd.DataFrame(x)
-            z = np.array(pd.concat([s, s.shift(), s.shift(2), s.shift(3), s.shift(4)], axis=1))[4:,:]
-            yo = yo[4:,:]
-            y = y[4:,:]
+            z = np.array(pd.concat([s, s.shift(), s.shift(2), s.shift(3), s.shift(4)], axis=1))[4:, :]
+            yo = yo[4:, :]
+            y = y[4:, :]
             z, _ = self.pca_factor_estimation(x=np.concatenate((z, z ** 2), axis=1), r=8)
             z = np.concatenate((z, z ** 2), axis=1)
         elif z_type == 7:
@@ -796,12 +799,16 @@ class Fl_cw(Fl_master):
 
         return y_hat_store, e_hat_store, math.sqrt(np.mean(np.array(e_hat_store) ** 2))
 
-    def one_step_eval(self, arg, extra):
+    def one_step_eval(self, arg, extra, idx):
         x, yo, y = arg
-        cw_model_class, cw_hparams, h, m, p, r, z_type = extra
+        cw_model_class, cw_hparams, h, m, p, r, z_type, save_dir = extra
         z_matrix, y_vec = self.prepare_data_matrix(x[:-1, :], yo[:-1, :], y[:-1, :], h, m, p, z_type)
         cw_model = cw_model_class(z_matrix=z_matrix, y_vec=y_vec, hparams=cw_hparams, r=r)
-        cw_model.fit()
+        if save_dir:
+            plot_name = f'{save_dir}/{idx}'
+        else:
+            plot_name = None
+        cw_model.fit(plot_name=plot_name)
 
         z_matrix, y_vec = self.prepare_data_matrix(x, yo, y, h, m, p, z_type)
         exog = z_matrix[-1:, :]
@@ -809,12 +816,23 @@ class Fl_cw(Fl_master):
         y_1_hat = cw_model.predict(exog=exog).item()
         e_1_hat = y[-1].item() - y_1_hat
 
+
+        if save_dir:
+            t1 = time.perf_counter()
+            e_1_hat_store = np.cumsum(cw_model.bhat_new_store.toarray(), axis=0) @ exog.squeeze() - y[-1].item()
+            plt.plot(e_1_hat_store)
+            plt.axvline(cw_model.m_star, linestyle='--')
+            plt.savefig(f'{save_dir}/test_{idx}.png')
+            plt.close()
+            t2 = time.perf_counter()
+            print(t2 - t1)
+
         return y_1_hat, e_1_hat, cw_model.return_data_dict()
 
     def multicore_pls_expanding_window(self, h, m, p, r, cw_model_class, cw_hparams, x_t, yo_t, y_t, x_v, yo_v, y_v,
                                        z_type,
-                                       rolling=False,
-                                       save_dir=None, save_name=None):
+                                       save_dir, save_name,
+                                       rolling=False):
         if z_type < 3:
             # Only dataset 3,4,5,6,7,8 has factors
             r = None
@@ -829,24 +847,68 @@ class Fl_cw(Fl_master):
 
         with concurrent.futures.ProcessPoolExecutor(max_workers=4) as executer:
             results = executer.map(self.one_step_eval, args,
-                                   itertools.repeat((cw_model_class, cw_hparams, h, m, p, r, z_type)))
+                                   itertools.repeat((cw_model_class, cw_hparams, h, m, p, r, z_type,
+                                                     None)),
+                                   itertools.count())
 
         y_hat_store, e_hat_store, cw_data_store = zip(*list(results))
-
+        hparams = cw_hparams.copy()
+        hparams = hparams.update([('h', h),
+                           ('m', m),
+                           ('p', p),
+                           ('r', r),
+                           ('z_type', z_type)])
+        cw_data_store[0]['hparams'] = hparams
         with open('{}/{}_h{}_all.pkl'.format(save_dir, save_name, h), "wb") as file:
             pickle.dump(cw_data_store, file)
 
         return y_hat_store, e_hat_store, math.sqrt(np.mean(np.array(e_hat_store) ** 2))
 
 
+class Fl_xgb(Fl_cw):
+    def one_step_eval(self, arg, extra, idx):
+        x, yo, y = arg
+        cw_model_class, cw_hparams, h, m, p, r, z_type, save_dir = extra
+        z_matrix, y_vec = self.prepare_data_matrix(x[:-1, :], yo[:-1, :], y[:-1, :], h, m, p, z_type)
+        cw_model = cw_model_class(z_matrix=z_matrix, y_vec=y_vec, hparams=cw_hparams, r=r)
+        if save_dir:
+            plot_name = f'{save_dir}/{idx}'
+        else:
+            plot_name = None
+
+
+        z_matrix, y_vec = self.prepare_data_matrix(x, yo, y, h, m, p, z_type)
+        exog = z_matrix[-1:, :]
+
+        cw_model.fit(deval=xgb.DMatrix(data=exog, label=y[[-1]]),plot_name=plot_name)
+
+        y_1_hat = cw_model.predict(exog=exog).item()
+        e_1_hat = y[-1].item() - y_1_hat
+
+        if save_dir:
+            t1 = time.perf_counter()
+            e_1_hat_store = np.cumsum(cw_model.bhat_new_store.toarray(), axis=0) @ exog.squeeze() - y[-1].item()
+            plt.plot(e_1_hat_store)
+            plt.axvline(cw_model.m_star, linestyle='--')
+            plt.savefig(f'{save_dir}/test_{idx}.png')
+            plt.close()
+            t2 = time.perf_counter()
+            print(t2 - t1)
+
+        return y_1_hat, e_1_hat, cw_model.return_data_dict()
+
+
 class Fl_cw_data_store(Fl_cw):
     def predict(self, b_hat_store, exog):
-        return np.cumsum(b_hat_store.toarray(), axis=0)@exog.squeeze()
+        return np.cumsum(b_hat_store.toarray(), axis=0) @ exog.squeeze()
 
-    def pls_expanding_window(self, h, m, p, data_store, x_t, yo_t, y_t, x_v, yo_v, y_v, z_type, rolling=False):
+    def pls_expanding_window(self, h, m, p, data_store, x_t, yo_t, y_t, x_v, yo_v, y_v, z_type, save_dir,
+                             rolling=False):
         y_hat_store = []
         e_hat_store = []
         n_val = np.shape(x_v)[0]
+
+        plot_idx = 20
 
         for idx, (x_1, yo_1, y_1) in enumerate(zip(x_v.tolist(), yo_v.tolist(), y_v.tolist())):
             x_t = np.concatenate((x_t, np.array(x_1)[None, ...]), axis=0)
@@ -855,15 +917,28 @@ class Fl_cw_data_store(Fl_cw):
 
             z_matrix, y_vec = self.prepare_data_matrix(x_t, yo_t, y_t, h, m, p, z_type)
             exog = z_matrix[-1:, :]
-            try:
-                y_1_hat = np.array(self.predict(b_hat_store=data_store[idx]['bhat_new_store'], exog=exog))
-            except IndexError:
-                # Initial datastore did not save last few models so list of data store is shorter than validation data
-                break
+            cum_bhat_store = np.cumsum(data_store[idx]['bhat_new_store'].toarray(), axis=0)
+            y_1_hat = np.array(cum_bhat_store @ exog.squeeze())
             e_1_hat = y_1[0] - y_1_hat
 
             y_hat_store.append(y_1_hat)
             e_hat_store.append(e_1_hat)
+
+            if idx % 20 == 0:
+                # plot stuff
+                train_error = np.mean((z_matrix @ cum_bhat_store.T - y_vec) ** 2, axis=0)
+                plt.plot(train_error)
+                plt.axvline(data_store[idx]['m_star'], linestyle='--', color='r')
+                plt.ylim([min(train_error[:data_store[idx]['m_star'] + 2]),
+                          max(train_error[:data_store[idx]['m_star'] + 2])])
+                plt.savefig(f'{save_dir}/trainerror_{idx}.png')
+                plt.close()
+
+                plt.plot(e_1_hat)
+                plt.axvline(data_store[idx]['m_star'], linestyle='--', color='r')
+                plt.ylim([min(e_1_hat[:data_store[idx]['m_star'] + 2]), max(e_1_hat[:data_store[idx]['m_star'] + 2])])
+                plt.savefig(f'{save_dir}/testerror_{idx}.png')
+                plt.close()
 
             if idx + 1 == n_val:
                 break  # since last iteration, no need to waste time re-estimating model
