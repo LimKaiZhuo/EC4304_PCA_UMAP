@@ -16,8 +16,13 @@ def read_excel_to_df(excel_dir):
         if sheet == 'Sheet':
             pass
         else:
-            df = pd.read_excel(excel_dir, sheet_name=sheet, skiprows=[0, 2],
-                               index_col=0).sort_values(['m', 'p'])
+            try:
+                df = pd.read_excel(excel_dir, sheet_name=sheet, skiprows=[0, 2],
+                                   index_col=0).sort_values(['m', 'p'])
+            except KeyError:
+                # Best summary does not have that blank line
+                df = pd.read_excel(excel_dir, sheet_name=sheet,
+                                   index_col=0)
             df = df.reset_index(drop=True)
             df_store.append(df)
 

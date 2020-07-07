@@ -853,7 +853,7 @@ class Fl_cw(Fl_master):
 
         y_hat_store, e_hat_store, cw_data_store = zip(*list(results))
         hparams = cw_hparams.copy()
-        hparams = hparams.update([('h', h),
+        hparams.update([('h', h),
                            ('m', m),
                            ('p', p),
                            ('r', r),
@@ -866,6 +866,62 @@ class Fl_cw(Fl_master):
 
 
 class Fl_xgb(Fl_cw):
+    def pls_expanding_window(self, h, m, p, r, cw_model_class, cw_hparams, x_t, yo_t, y_t, x_v, yo_v, y_v,
+                                       z_type,
+                                       save_dir, save_name,
+                                       rolling=False):
+        y_hat_store = []
+        e_hat_store = []
+
+        n_val = np.shape(x_v)[0]
+        x = x_t
+        yo = yo_t
+        y = y_t
+
+        for idx, (x_1, yo_1, y_1) in enumerate(zip(x_v.tolist(), yo_v.tolist(), y_v.tolist())):
+            x = np.concatenate((x, np.array(x_1)[None, ...]), axis=0)
+            yo = np.concatenate((yo, np.array(yo_1)[None, ...]), axis=0)
+            y = np.concatenate((y, np.array(y_1)[None, ...]), axis=0)
+
+            z_matrix, y_vec = self.prepare_data_matrix(x[:-1, :], yo[:-1, :], y[:-1, :], h, m, p, z_type)
+            cw_model = cw_model_class(z_matrix=z_matrix, y_vec=y_vec, hparams=cw_hparams, r=r)
+            z_matrix, y_vec = self.prepare_data_matrix(x, yo, y, h, m, p, z_type)
+            exog = z_matrix[-1:, :]
+            cw_model.fit(deval=xgb.DMatrix(data=exog, label=y[[-1]]), plot_name=None)
+            y_1_hat = cw_model.predict(exog=exog).item()
+            e_1_hat = y[-1].item() - y_1_hat
+
+            y_hat_store.append(y_1_hat)
+            e_hat_store.append(e_1_hat)
+
+            if save_dir:
+                end = time.time()
+                if (idx) % 5 == 0:
+                    try:
+                        print('Time taken for 5 steps CW PLS is {}'.format(end - start))
+                        with open('{}/{}_h{}_{}.pkl'.format(save_dir, save_name, h, idx), "wb") as file:
+                            pickle.dump(data_store, file)
+                    except:
+                        pass
+                    data_store = []
+                data_store.append(cw_model.return_data_dict())
+                start = time.time()
+
+            if idx + 1 == n_val:
+                break  # since last iteration, no need to waste time re-estimating model
+
+            if rolling:
+                # Drop the first observation in the matrix for rolling window
+                x = x[1:, :]
+                yo = yo[1:, :]
+                y = y[1:, :]
+
+        if idx % 5 != 0:
+            with open('{}/{}_h{}_{}.pkl'.format(save_dir, save_name, h, idx), "wb") as file:
+                pickle.dump(data_store, file)
+
+        return y_hat_store, e_hat_store, math.sqrt(np.mean(np.array(e_hat_store) ** 2))
+
     def one_step_eval(self, arg, extra, idx):
         x, yo, y = arg
         cw_model_class, cw_hparams, h, m, p, r, z_type, save_dir = extra

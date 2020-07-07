@@ -346,7 +346,7 @@ class Xgboost(Boost):
     def fit(self, deval, plot_name=None):
         self.progress = dict()
         dtrain = xgb.DMatrix(self.z_matrix, label=self.y_vec)
-        self.model = xgb.train(self.hparams, dtrain=dtrain, num_boost_round=50,
+        self.model = xgb.train(self.hparams, dtrain=dtrain, num_boost_round=1000,
                                evals=[(dtrain, 'train'), (deval, 'h_step_ahead')], evals_result=self.progress,
                                verbose_eval=False)
         if plot_name:
@@ -433,44 +433,6 @@ def run_testing():
         yhat_ols = ols.predict(sm.add_constant(z_test))[..., None]
         ssr_ols = sum((y_test - yhat_ols) ** 2)
 
-        results_store = {'n_total': n_total,
-                         'T_train': t_train,
-                         'T_test': t_test,
-                         'Simulation Runs': simulation_runs,
-                         'OLS MSE': ssr_ols / t_test,
-                         # 'Lasso MSE': ssr_lasso / t_test,
-                         # 'lasso_alpha': 10 ** alpha,
-                         'predictor': np.arange(n_total + 1),
-                         'True params': [1, 5, 2, 1] + [0] * (n_total - 3),
-                         'ols params': ols.params,
-                         # 'Lasso params': lasso.params,
-                         }
-
-        store = []
-
-        hparams = {'m_max': 500, 'learning_rate': 0.01, 'ic_mode': 'aic', 'dropout': 0.2}
-        cw_run(cw=ComponentwiseL2BoostDropout, hparams=hparams, store=store, idx=idx, name='cwd01_10')
-
-        hparams = {'m_max': 500, 'learning_rate': 0.3, 'ic_mode': 'aic', 'dropout': 0.1}
-        cw_run(cw=ComponentwiseL2BoostDropout, hparams=hparams, store=store, idx=idx, name='cwd03_10')
-
-        hparams = {'m_max': 2000, 'learning_rate': 0.1, 'ic_mode': 'aic'}
-        cw_run(cw=ComponentwiseL2Boost, hparams=hparams, store=store, idx=idx, name='cw01')
-
-        hparams = {'m_max': 2000, 'learning_rate': 0.3, 'ic_mode': 'aic'}
-        cw_run(cw=ComponentwiseL2Boost, hparams=hparams, store=store, idx=idx, name='cw03')
-
-        hparams = {'m_max': 500, 'learning_rate': 0.1, 'ic_mode': 'aic', 'dropout': 0.5}
-        cw_run(cw=ComponentwiseL2BoostDropout, hparams=hparams, store=store, idx=idx, name='cwd01_50')
-
-        hparams = {'m_max': 500, 'learning_rate': 0.3, 'ic_mode': 'aic', 'dropout': 0.5}
-        cw_run(cw=ComponentwiseL2BoostDropout, hparams=hparams, store=store, idx=idx, name='cwd03_50')
-
-        store = list(zip(*store))
-        for item in store:
-            results_store.update(item)
-
-        '''
         # lasso 10CV
         space = [Real(low=-10, high=1, name='alpha')]
 
@@ -490,7 +452,43 @@ def run_testing():
         lasso = sm.OLS(endog=y, exog=sm.add_constant(z)).fit_regularized(L1_wt=1, alpha=10 ** alpha)
         yhat_lasso = lasso.predict(sm.add_constant(z_test))[..., None]
         ssr_lasso = sum((y_test - yhat_lasso) ** 2)
-        '''
+
+        results_store = {'n_total': n_total,
+                         'T_train': t_train,
+                         'T_test': t_test,
+                         'Simulation Runs': simulation_runs,
+                         'OLS MSE': ssr_ols / t_test,
+                         'Lasso MSE': ssr_lasso / t_test,
+                         'lasso_alpha': 10 ** alpha,
+                         'predictor': np.arange(n_total + 1),
+                         'True params': [1, 5, 2, 1] + [0] * (n_total - 3),
+                         'ols params': ols.params,
+                         'Lasso params': lasso.params,
+                         }
+
+        store = []
+
+        hparams = {'m_max': 500, 'learning_rate': 0.1, 'ic_mode': 'aic', 'dropout': 0.5}
+        cw_run(cw=ComponentwiseL2BoostDropout, hparams=hparams, store=store, idx=idx, name='cwd01_50')
+
+        hparams = {'m_max': 500, 'learning_rate': 0.3, 'ic_mode': 'aic', 'dropout': 0.5}
+        cw_run(cw=ComponentwiseL2BoostDropout, hparams=hparams, store=store, idx=idx, name='cwd03_50')
+
+        hparams = {'m_max': 2000, 'learning_rate': 0.1, 'ic_mode': 'aic'}
+        cw_run(cw=ComponentwiseL2Boost, hparams=hparams, store=store, idx=idx, name='cw01')
+
+        hparams = {'m_max': 2000, 'learning_rate': 0.3, 'ic_mode': 'aic'}
+        cw_run(cw=ComponentwiseL2Boost, hparams=hparams, store=store, idx=idx, name='cw03')
+
+        hparams = {'m_max': 500, 'learning_rate': 0.1, 'ic_mode': 'aic', 'dropout': 0.5}
+        cw_run(cw=ComponentwiseL2BoostDropout, hparams=hparams, store=store, idx=idx, name='cwd01_50')
+
+        hparams = {'m_max': 500, 'learning_rate': 0.3, 'ic_mode': 'aic', 'dropout': 0.5}
+        cw_run(cw=ComponentwiseL2BoostDropout, hparams=hparams, store=store, idx=idx, name='cwd03_50')
+
+        store = list(zip(*store))
+        for item in store:
+            results_store.update(item)
 
         df_store.append(pd.DataFrame({k: pd.Series(v) for k, v in results_store.items()}))
 

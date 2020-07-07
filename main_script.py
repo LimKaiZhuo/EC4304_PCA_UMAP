@@ -175,14 +175,15 @@ def selector(case, excel_dir=None, var_name=None):
                 bounds_p = [12, 12]
                 fl = fl_xgb
                 kwargs = {'cw_model_class': Xgboost,
-                          'cw_hparams': {'booster': 'dart',
-                                         'max_depth': 1,
+                          'cw_hparams': {'booster': 'gbtree',
+                                         'max_depth': 3,
                                          'learning_rate': 0.1,
                                          'objective': 'reg:squarederror',
                                          'sample_type': 'uniform',
                                          'normalize_type': 'tree',
                                          'rate_drop': 0.1,
-                                         'skip_drop': 0.5,}}
+                                         'skip_drop': 0.5,
+                                         'verbosity':0}}
             else:
                 raise KeyError('Invalid model mode selected.')
 
@@ -196,7 +197,7 @@ def selector(case, excel_dir=None, var_name=None):
                 sheet_name = wb.sheetnames[-1]
                 ws = wb[sheet_name]
 
-                print_array_to_excel(array=['h = {}'.format(h), 'r = 9', var_name], first_cell=(1, 1), ws=ws, axis=1)
+                print_array_to_excel(array=['h = {}'.format(h), 'r = 8', var_name], first_cell=(1, 1), ws=ws, axis=1)
                 rows = dataframe_to_rows(df)
 
                 for r_idx, row in enumerate(rows, 1):
@@ -213,7 +214,8 @@ def selector(case, excel_dir=None, var_name=None):
 if __name__ == '__main__':
     # selector(0)
     # selector(1)
-    selector(4, excel_dir='./excel/dataset2/INDPRO_data_loader.xlsx', var_name='testset_INDxgb')
+    selector(4, excel_dir='./excel/dataset2/INDPRO_data_loader.xlsx', var_name='testset_INDxgb3')
+    #selector(4, excel_dir='./excel/dataset2/W875RX1_data_loader.xlsx', var_name='testset_W875xgb')
     # selector(3, excel_dir='./excel/DPC_data_loader.xlsx', var_name='DPC')
 
     # selector(3, excel_dir='./excel/WPSFD49207_data_loader.xlsx', var_name='WPSFD49207')
