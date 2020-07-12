@@ -11,8 +11,12 @@ from openpyxl.utils.dataframe import dataframe_to_rows
 import openpyxl
 import umap
 import statsmodels.api as sm
+from sklearn.model_selection import cross_val_score
+from skopt import gp_minimize
+from skopt.space import Real, Integer
+from skopt.utils import use_named_args
 
-from own_package.others import create_results_directory
+from own_package.others import create_results_directory, print_df_to_excel
 
 
 def read_excel_data(excel_dir):
@@ -164,8 +168,8 @@ def hparam_selection(fl, model, type, bounds_m, bounds_p, h, h_idx, h_max, r, re
                                                    np.array(aic_t_store)[..., None],
                                                    np.array(bic_t_store)[..., None]), axis=1),
                               columns=['m', 'p', 'Val RMSE', 'AIC_t', 'BIC_t'])
-    elif model in ['CW{}'.format(i) for i in range(1, 9)] + ['CWd{}'.format(i) for i in range(1, 9)] + [
-        'XGB{}'.format(i) for i in range(1, 9)]:
+    elif model in ['CW{}'.format(i) for i in range(1, 10)] + ['CWd{}'.format(i) for i in range(1, 10)] + [
+        'XGB{}'.format(i) for i in range(1, 10)]:
         z_type = int(model[-1])
         cw_model_class = kwargs['cw_model_class']
         cw_hparams = kwargs['cw_hparams']
@@ -198,7 +202,24 @@ def hparam_selection(fl, model, type, bounds_m, bounds_p, h, h_idx, h_max, r, re
                                                    np.array(y_hat_store)), axis=1),
                               columns=['m', 'p', 'Val RMSE', 'AIC_t', 'BIC_t'] + fl.y_v[:, h_idx].flatten().tolist())
 
-
+        elif type == 'k_fold':
+            z_type = int(model[-1])
+            z_matrix, y_vec = fl.prepare_data_matrix(fl.x_t, fl.yo_t, fl.y_t[:, [h_idx]], h, m_max, p_max, z_type)
+            results_df = fl.xgb_hparam_opt(z=z_matrix, y=y_vec)
+            try:
+                wb = openpyxl.load_workbook(f'{results_dir}/{model}_hparam_opt.xlsx')
+            except FileNotFoundError:
+                wb = openpyxl.Workbook()
+            wb.create_sheet(f'{model}_h{h}')
+            ws = wb[wb.sheetnames[-1]]
+            print_df_to_excel(df=pd.DataFrame({'r': r,
+                                               'm': m_max,
+                                               'p': p_max},
+                                              index=[0]),
+                              ws=ws)
+            print_df_to_excel(df=results_df, ws=ws, start_row=3)
+            wb.save(f'{results_dir}/{model}_hparam_opt.xlsx')
+            df = results_df
         elif type == 'AIC_BIC':
             raise KeyError('CW model selected. AIC_BIC method not available for CW model.')
     else:
@@ -722,6 +743,15 @@ class Fl_cw(Fl_master):
         elif z_type == 8:
             z, _ = self.pca_factor_estimation(x=np.concatenate((x, x ** 2), axis=1), r=8)
             z = np.concatenate((z, z ** 2), axis=1)
+        elif z_type == 9:
+            try:
+                cut = np.where(np.isnan(y).squeeze())[0][-1] + 1
+                z = x[cut:, :]
+                yo = y[cut:, :]
+                y = y[cut:, :]
+            except IndexError:
+                z = x
+                yo = y
 
         a = max(m, p)
         T = np.shape(z)[0]
@@ -816,7 +846,6 @@ class Fl_cw(Fl_master):
         y_1_hat = cw_model.predict(exog=exog).item()
         e_1_hat = y[-1].item() - y_1_hat
 
-
         if save_dir:
             t1 = time.perf_counter()
             e_1_hat_store = np.cumsum(cw_model.bhat_new_store.toarray(), axis=0) @ exog.squeeze() - y[-1].item()
@@ -854,10 +883,10 @@ class Fl_cw(Fl_master):
         y_hat_store, e_hat_store, cw_data_store = zip(*list(results))
         hparams = cw_hparams.copy()
         hparams.update([('h', h),
-                           ('m', m),
-                           ('p', p),
-                           ('r', r),
-                           ('z_type', z_type)])
+                        ('m', m),
+                        ('p', p),
+                        ('r', r),
+                        ('z_type', z_type)])
         cw_data_store[0]['hparams'] = hparams
         with open('{}/{}_h{}_all.pkl'.format(save_dir, save_name, h), "wb") as file:
             pickle.dump(cw_data_store, file)
@@ -867,9 +896,9 @@ class Fl_cw(Fl_master):
 
 class Fl_xgb(Fl_cw):
     def pls_expanding_window(self, h, m, p, r, cw_model_class, cw_hparams, x_t, yo_t, y_t, x_v, yo_v, y_v,
-                                       z_type,
-                                       save_dir, save_name,
-                                       rolling=False):
+                             z_type,
+                             save_dir, save_name,
+                             rolling=False):
         y_hat_store = []
         e_hat_store = []
 
@@ -932,11 +961,10 @@ class Fl_xgb(Fl_cw):
         else:
             plot_name = None
 
-
         z_matrix, y_vec = self.prepare_data_matrix(x, yo, y, h, m, p, z_type)
         exog = z_matrix[-1:, :]
 
-        cw_model.fit(deval=xgb.DMatrix(data=exog, label=y[[-1]]),plot_name=plot_name)
+        cw_model.fit(deval=xgb.DMatrix(data=exog, label=y[[-1]]), plot_name=plot_name)
 
         y_1_hat = cw_model.predict(exog=exog).item()
         e_1_hat = y[-1].item() - y_1_hat
@@ -952,6 +980,40 @@ class Fl_xgb(Fl_cw):
             print(t2 - t1)
 
         return y_1_hat, e_1_hat, cw_model.return_data_dict()
+
+    def xgb_hparam_opt(self, z, y):
+        # Space should include 1) max_depth, 2) subsample, 3) colsample_bytree
+        space = [Integer(1, 6, name='max_depth'),
+                 Real(0.5, 1, name='subsample'),
+                 Real(0.5, 1, name='colsample_bytree'), ]
+        n_rounds_store = []
+
+        @use_named_args(space)
+        def objective(**params):
+            full_params = {'booster': 'gbtree',
+                           'max_depth': 1,
+                           'learning_rate': 0.1,
+                           'objective': 'reg:squarederror',
+                           'verbosity': 0}
+            params = {**full_params, **params}
+
+            cv_results = xgb.cv(params=params, dtrain=xgb.DMatrix(data=z, label=y),
+                                nfold=10, num_boost_round=1500, early_stopping_rounds=50,
+                                metrics='rmse', as_pandas=True, seed=42)
+            n_rounds_store.append(cv_results.shape[0])
+            return cv_results['test-rmse-mean'].values[-1]
+
+        res_gp = gp_minimize(objective, space, n_calls=100, random_state=42,
+                             x0=[[1, 1, 1],
+                                 [1, 0.9, 0.9],
+                                 [1, 1, 0.9]])
+        df = pd.DataFrame(data=np.concatenate((res_gp.x_iters,
+                                               np.array(n_rounds_store)[:, None],
+                                               res_gp.func_vals[:, None]),
+                                              axis=1),
+                          columns=[s.name for s in res_gp.space] + ['m iters', 'val rmse']
+                          ).sort_values('val rmse')
+        return df
 
 
 class Fl_cw_data_store(Fl_cw):

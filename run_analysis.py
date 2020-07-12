@@ -17,7 +17,7 @@ def selector(case, **kwargs):
                     excel_dir='./excel/dataset2/W875RX1_data_loader.xlsx')
         pass
     elif case == 1.1:
-        xgb_analysis('./results/testset_W875xgb')
+        xgb_analysis('./results/testset_INDxgb9')
     elif case == 2:
         d = [6]
         h_store = zip([1, 3, 6, 12, 24], [0, 1, 2, 3, 4])
@@ -40,9 +40,9 @@ def selector(case, **kwargs):
         xgbs_dir = './results/testset_INDxgb/best_xgb.xlsx'
         results_dir = './results/testset_IND'
 
-        best_summary_dir = './results/testset_W875/best summary.xlsx'
-        xgbs_dir = './results/testset_W875xgb/best_xgb.xlsx'
-        results_dir = './results/testset_W875'
+        #best_summary_dir = './results/testset_W875/best summary.xlsx'
+        #xgbs_dir = './results/testset_W875xgb/best_xgb.xlsx'
+        #results_dir = './results/testset_W875'
 
         combine_best_summary_and_xgbs(best_summary_dir=best_summary_dir,
                                       xgbs_dir=xgbs_dir,

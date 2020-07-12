@@ -126,18 +126,18 @@ def selector(case, excel_dir=None, var_name=None):
                       features_names=fl_master.features_names, labels_names=fl_master.labels_names,
                       y_names=fl_master.y_names)
         fl_xgb = Fl_xgb(val_split=0.2, x=f_tv, yo=yo_tv, y=y_tv,
-                      time_stamp=ts_tv, time_idx=tidx_tv,
-                      features_names=fl_master.features_names, labels_names=fl_master.labels_names,
-                      y_names=fl_master.y_names)
-        # h_steps = [12]
-        # h_idx_store = [3]  # h = 1 corresponds to h_idx=0, h=3 is h_idx=1, and so on
+                        time_stamp=ts_tv, time_idx=tidx_tv,
+                        features_names=fl_master.features_names, labels_names=fl_master.labels_names,
+                        y_names=fl_master.y_names)
+        #h_steps = [24]
+        #h_idx_store = [4]  # h = 1 corresponds to h_idx=0, h=3 is h_idx=1, and so on
         h_steps = [1, 3, 6, 12, 24]
         h_idx_store = [0, 1, 2, 3, 4]
         # type_store = ['PLS', 'PLS', 'PLS']
         # model_store = ['CW1']
-        model_store = [f'XGB{x}' for x in [1,2,3,4,5,6,7,8]]
+        model_store = [f'XGB{x}' for x in [1,2,3,4,5,6]]
         # model_store =['CWd5','CWd6']
-        type_store = ['PLS'] * len(model_store)
+        type_store = ['k_fold'] * len(model_store)
         # type_store = ['AIC_BIC']
         # model_store = ['UMAP']
         for type, model in zip(type_store, model_store):
@@ -176,14 +176,23 @@ def selector(case, excel_dir=None, var_name=None):
                 fl = fl_xgb
                 kwargs = {'cw_model_class': Xgboost,
                           'cw_hparams': {'booster': 'gbtree',
-                                         'max_depth': 3,
+                                         'max_depth': 1,
                                          'learning_rate': 0.1,
                                          'objective': 'reg:squarederror',
                                          'sample_type': 'uniform',
                                          'normalize_type': 'tree',
                                          'rate_drop': 0.1,
                                          'skip_drop': 0.5,
-                                         'verbosity':0}}
+                                         'verbosity': 0}}
+
+                kwargs['cw_hparams'] = {'booster': 'gbtree',
+                                        'max_depth': 6,
+                                        'learning_rate': 0.1,
+                                        'objective': 'reg:squarederror',
+                                        'verbosity': 0,
+                                        'subsample': 1,
+                                        'colsample_bytree':0.5,
+                                        'num_boost_round':236}
             else:
                 raise KeyError('Invalid model mode selected.')
 
@@ -214,8 +223,9 @@ def selector(case, excel_dir=None, var_name=None):
 if __name__ == '__main__':
     # selector(0)
     # selector(1)
-    selector(4, excel_dir='./excel/dataset2/INDPRO_data_loader.xlsx', var_name='testset_INDxgb3')
-    #selector(4, excel_dir='./excel/dataset2/W875RX1_data_loader.xlsx', var_name='testset_W875xgb')
+    #selector(4, excel_dir='./excel/dataset2/INDPRO_data_loader.xlsx', var_name='testset_INDxgb_hparam_opt ')
+    #selector(4, excel_dir='./excel/dataset2/W875RX1_data_loader.xlsx', var_name='testset_W875xgb_hparam_opt')
+    selector(4, excel_dir='./excel/dataset2/CPIAUCSL_data_loader.xlsx', var_name='testset_CPIAxgb_hparam_opt')
     # selector(3, excel_dir='./excel/DPC_data_loader.xlsx', var_name='DPC')
 
     # selector(3, excel_dir='./excel/WPSFD49207_data_loader.xlsx', var_name='WPSFD49207')

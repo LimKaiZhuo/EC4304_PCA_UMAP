@@ -346,7 +346,7 @@ class Xgboost(Boost):
     def fit(self, deval, plot_name=None):
         self.progress = dict()
         dtrain = xgb.DMatrix(self.z_matrix, label=self.y_vec)
-        self.model = xgb.train(self.hparams, dtrain=dtrain, num_boost_round=1000,
+        self.model = xgb.train(self.hparams, dtrain=dtrain, num_boost_round=self.hparams['num_boost_round'],
                                evals=[(dtrain, 'train'), (deval, 'h_step_ahead')], evals_result=self.progress,
                                verbose_eval=False)
         if plot_name:
