@@ -1,12 +1,12 @@
 import numpy as np
 import pandas as pd
-import math
+import math, random
 import cvxpy as cp
 import openpyxl
 import statsmodels.api as sm
 from openpyxl.utils.dataframe import dataframe_to_rows
 from own_package.dm_test import dm_test
-
+from own_package.others import create_excel_file
 
 def read_excel_to_df(excel_dir):
     xls = pd.ExcelFile(excel_dir)
@@ -16,8 +16,13 @@ def read_excel_to_df(excel_dir):
         if sheet == 'Sheet':
             pass
         else:
-            df = pd.read_excel(excel_dir, sheet_name=sheet, skiprows=[0, 2],
-                               index_col=0).sort_values(['m', 'p'])
+            try:
+                df = pd.read_excel(excel_dir, sheet_name=sheet, skiprows=[0, 2],
+                                   index_col=0).sort_values(['m', 'p'])
+            except KeyError:
+                # Best summary does not have that blank line
+                df = pd.read_excel(excel_dir, sheet_name=sheet,
+                                   index_col=0)
             df = df.reset_index(drop=True)
             df_store.append(df)
 
@@ -31,9 +36,9 @@ def compile_pm_rm_excel(excel_dir_store):
         xls = pd.ExcelFile(excel_dir)
         sheet_names = xls.sheet_names[1:]
         for sheet, pm_store, rm_store in zip(sheet_names, master_pm, master_rm):
-            df = pd.read_excel(excel_dir, sheet_name=sheet).values
-            pm_store.append(df[0:9, :])
-            rm_store.append(df[10:, 0][..., None])
+            df = pd.read_excel(excel_dir, sheet_name=sheet, index_col=None).values
+            pm_store.append(df[1:10, :])
+            rm_store.append(df[11:, 0][..., None])
 
     for idx, pm_h in enumerate(master_pm):
         pm = pm_h[0]
@@ -47,7 +52,8 @@ def compile_pm_rm_excel(excel_dir_store):
             rm = np.concatenate((rm, pm_hh), axis=1)
         master_rm[idx] = rm
 
-    wb = openpyxl.Workbook()
+    excel_dir = create_excel_file('./results/master_pm_rd.xlsx')
+    wb = openpyxl.load_workbook(excel_dir)
     for idx, (pm, rm) in enumerate(zip(master_pm, master_rm)):
 
         pm_name = 'pm_h{}'.format([1, 3, 6, 12, 24][idx])
@@ -69,13 +75,13 @@ def compile_pm_rm_excel(excel_dir_store):
             for c_idx, value in enumerate(row, 1):
                 ws.cell(row=r_idx + 1, column=c_idx, value=value)
 
-    wb.save('./results/master_pm_rd.xlsx')
+    wb.save(excel_dir)
 
     pass
 
 
 class Postdata:
-    def __init__(self, results_dir, var_name, star=True):
+    def __init__(self, results_dir, var_name, calculations=True, star=True):
         self.star = star
         self.results_dir = results_dir
         # First 3 lines if a list of dataframes. Each df is one h step ahead, for h=1,3,6,12,24
@@ -104,162 +110,164 @@ class Postdata:
         self.testset_UMAP_y = [np.array(x.columns.tolist()[5:]) for x in self.testset_UMAP_PLS]
         self.testset_UMAP_y_hat = [x.iloc[:, 5:].values for x in self.testset_UMAP_PLS]
 
-        self.num_h = len(self.AR_AIC_BIC)
-        self.pm_store = [np.zeros((9, 2)) for x in range(self.num_h)]
-        self.rm_store = [np.zeros((23), dtype=np.object) for x in range(self.num_h)]
-        self.benchmark_rmse = []
-        self.benchmarky = []
         self.hsteps = [1, 3, 6, 12, 24]
 
-        i = 0
-        # Iterate through each h step ahead values for all AR. h = 1,3,6,12,24
-        for idx, (aic, pls, test, pm, rm, yhat, y) in enumerate(
-                zip(self.AR_AIC_BIC, self.AR_PLS, self.testset_AR_PLS, self.pm_store, self.rm_store,
-                    self.testset_AR_y_hat, self.testset_AR_y)):
-            self.benchmark_forecasted_y_BIC = []
-            min_BIC_idx = np.argmin(aic['BIC_t'])
-            pm[1, 1] = aic['p'][min_BIC_idx]
-            rmse_idx = test.index[test['p'] == pm[1, 1]].tolist()[0]
-            self.benchmark_rmse.append(test['Val RMSE'][rmse_idx])
-            self.benchmarky.append(yhat[rmse_idx])
-            rm[1] = round(test['Val RMSE'][rmse_idx], 4)
+        if calculations:
+            self.num_h = len(self.AR_AIC_BIC)
+            self.pm_store = [np.zeros((9, 2)) for x in range(self.num_h)]
+            self.rm_store = [np.zeros((33), dtype=np.object) for x in range(self.num_h)]
+            self.benchmark_rmse = []
+            self.benchmarky = []
+
+            i = 0
+            # Iterate through each h step ahead values for all AR. h = 1,3,6,12,24
+            for idx, (aic, pls, test, pm, rm, yhat, y) in enumerate(
+                    zip(self.AR_AIC_BIC, self.AR_PLS, self.testset_AR_PLS, self.pm_store, self.rm_store,
+                        self.testset_AR_y_hat, self.testset_AR_y)):
+                self.benchmark_forecasted_y_BIC = []
+                min_BIC_idx = np.argmin(aic['BIC_t'])
+                pm[1, 1] = aic['p'][min_BIC_idx]
+                rmse_idx = test.index[test['p'] == pm[1, 1]].tolist()[0]
+                self.benchmark_rmse.append(test['Val RMSE'][rmse_idx])
+                self.benchmarky.append(yhat[rmse_idx])
+                rm[1] = round(test['Val RMSE'][rmse_idx], 4)
 
 
 
-            min_AIC_idx = np.argmin(aic['AIC_t'])
-            pm[0, 1] = aic['p'][min_AIC_idx]
-            rmse_idx2 = test.index[test['p'] == pm[0, 1]].tolist()[0]
-            rmse = test['Val RMSE'][rmse_idx2]
-            rm[0] = round(rmse / self.benchmark_rmse[-1], 4)
-            forecastedy = yhat[rmse_idx2]
-            if rmse_idx != rmse_idx2:
+                min_AIC_idx = np.argmin(aic['AIC_t'])
+                pm[0, 1] = aic['p'][min_AIC_idx]
+                rmse_idx2 = test.index[test['p'] == pm[0, 1]].tolist()[0]
+                rmse = test['Val RMSE'][rmse_idx2]
+                rm[0] = round(rmse / self.benchmark_rmse[-1], 4)
+                forecastedy = yhat[rmse_idx2]
+                if rmse_idx != rmse_idx2:
 
-                dm_r = dm_test(y, self.benchmarky[i], forecastedy, h=self.hsteps[i], crit="MSE")
-                pvalue = dm_r[1]
-                if pvalue <= 0.05 and self.star:
-                    rm[0] = '{}*'.format(round(rm[0], 4))
-
-
-
-            min_idx = np.argmin(pls['Val RMSE'])
-            pm[2, 1] = pls['p'][min_idx]
-            rmse_idx2 = test.index[test['p'] == pm[2, 1]].tolist()[0]
-            rmse = test['Val RMSE'][rmse_idx2]
-            rm[2] = round(rmse / self.benchmark_rmse[-1], 4)
-            forecastedy = yhat[rmse_idx2]
-            if rmse_idx != rmse_idx2:
-
-                dm_r = dm_test(y, self.benchmarky[i], forecastedy, h=self.hsteps[i], crit="MSE")
-                pvalue = dm_r[1]
-                if pvalue <= 0.05 and self.star:
-                    rm[2] = '{}*'.format(round(rm[2], 4))
+                    dm_r = dm_test(y, self.benchmarky[i], forecastedy, h=self.hsteps[i], crit="MSE")
+                    pvalue = dm_r[1]
+                    if pvalue <= 0.05 and self.star:
+                        rm[0] = '{}*'.format(round(rm[0], 4))
 
 
-            i = i + 1
 
-        i = 0
-        # Iterate through each h step ahead values for all PCA. h = 1,3,6,12,24
-        skip = 3
-        skip2 = 7
-        for idx, (aic, pls, test, pm, rm, yhat, y) in enumerate(
-                zip(self.PCA_AIC_BIC, self.PCA_PLS, self.testset_PCA_PLS, self.pm_store, self.rm_store,
-                    self.testset_PCA_y_hat, self.testset_PCA_y)):
-            min_BIC_idx = np.argmin(aic['BIC_t'])
-            pm[1 + skip, 0] = aic['m'][min_BIC_idx]
-            pm[1 + skip, 1] = aic['p'][min_BIC_idx]
-            rmse_idx = test.index[(test['m'] == pm[1 + skip, 0]) & (test['p'] == pm[1 + skip, 1])].tolist()[0]
-            rmse = test['Val RMSE'][rmse_idx]
-            rm[1 + skip2] = round(rmse / self.benchmark_rmse[idx], 4)
-            forecastedy = yhat[rmse_idx]
-            if np.all(self.benchmarky[i] != forecastedy):
-                dm_r = dm_test(y, self.benchmarky[i], forecastedy, h=self.hsteps[i], crit="MSE")
-                pvalue = dm_r[1]
-                if pvalue <= 0.05 and self.star:
-                    rm[1 + skip2] = '{}*'.format(rm[1 + skip2])
+                min_idx = np.argmin(pls['Val RMSE'])
+                pm[2, 1] = pls['p'][min_idx]
+                rmse_idx2 = test.index[test['p'] == pm[2, 1]].tolist()[0]
+                rmse = test['Val RMSE'][rmse_idx2]
+                rm[2] = round(rmse / self.benchmark_rmse[-1], 4)
+                forecastedy = yhat[rmse_idx2]
+                if rmse_idx != rmse_idx2:
+
+                    dm_r = dm_test(y, self.benchmarky[i], forecastedy, h=self.hsteps[i], crit="MSE")
+                    pvalue = dm_r[1]
+                    if pvalue <= 0.05 and self.star:
+                        rm[2] = '{}*'.format(round(rm[2], 4))
 
 
-            min_AIC_idx = np.argmin(aic['AIC_t'])
-            pm[0 + skip, 0] = aic['m'][min_AIC_idx]
-            pm[0 + skip, 1] = aic['p'][min_AIC_idx]
-            rmse_idx = test.index[(test['m'] == pm[0 + skip, 0]) & (test['p'] == pm[0 + skip, 1])].tolist()[0]
-            rmse = test['Val RMSE'][rmse_idx]
-            rm[0 + skip2] = round(rmse / self.benchmark_rmse[idx], 4)
-            forecastedy = yhat[rmse_idx]
-            if np.all(self.benchmarky[i] != forecastedy):
-                dm_r = dm_test(y, self.benchmarky[i], forecastedy, h=self.hsteps[i], crit="MSE")
-                pvalue = dm_r[1]
-                if pvalue <= 0.05 and self.star:
-                    rm[0 + skip2] = '{}*'.format(round(rm[0 + skip2], 4))
+                i = i + 1
+
+            i = 0
+            # Iterate through each h step ahead values for all PCA. h = 1,3,6,12,24
+            skip = 3
+            skip2 = 8
+            for idx, (aic, pls, test, pm, rm, yhat, y) in enumerate(
+                    zip(self.PCA_AIC_BIC, self.PCA_PLS, self.testset_PCA_PLS, self.pm_store, self.rm_store,
+                        self.testset_PCA_y_hat, self.testset_PCA_y)):
+                min_BIC_idx = np.argmin(aic['BIC_t'])
+                pm[1 + skip, 0] = aic['m'][min_BIC_idx]
+                pm[1 + skip, 1] = aic['p'][min_BIC_idx]
+                rmse_idx = test.index[(test['m'] == pm[1 + skip, 0]) & (test['p'] == pm[1 + skip, 1])].tolist()[0]
+                rmse = test['Val RMSE'][rmse_idx]
+                rm[1 + skip2] = round(rmse / self.benchmark_rmse[idx], 4)
+                forecastedy = yhat[rmse_idx]
+                if np.all(self.benchmarky[i] != forecastedy):
+                    dm_r = dm_test(y, self.benchmarky[i], forecastedy, h=self.hsteps[i], crit="MSE")
+                    pvalue = dm_r[1]
+                    if pvalue <= 0.05 and self.star:
+                        rm[1 + skip2] = '{}*'.format(rm[1 + skip2])
 
 
-            min_idx = np.argmin(pls['Val RMSE'])
-            pm[2 + skip, 0] = pls['m'][min_idx]
-            pm[2 + skip, 1] = pls['p'][min_idx]
-            rmse_idx = test.index[(test['m'] == pm[2 + skip, 0]) & (test['p'] == pm[2 + skip, 1])].tolist()[0]
-            rmse = test['Val RMSE'][rmse_idx]
-            rm[2 + skip2] = round(rmse / self.benchmark_rmse[idx], 4)
-            forecastedy = yhat[rmse_idx]
-            if np.all(self.benchmarky[i] != forecastedy):
-                dm_r = dm_test(y, self.benchmarky[i], forecastedy, h=self.hsteps[i], crit="MSE")
-                pvalue = dm_r[1]
-                if pvalue <= 0.05 and self.star:
-                    rm[2 + skip2] = '{}*'.format(round(rm[2 + skip2], 4))
+                min_AIC_idx = np.argmin(aic['AIC_t'])
+                pm[0 + skip, 0] = aic['m'][min_AIC_idx]
+                pm[0 + skip, 1] = aic['p'][min_AIC_idx]
+                rmse_idx = test.index[(test['m'] == pm[0 + skip, 0]) & (test['p'] == pm[0 + skip, 1])].tolist()[0]
+                rmse = test['Val RMSE'][rmse_idx]
+                rm[0 + skip2] = round(rmse / self.benchmark_rmse[idx], 4)
+                forecastedy = yhat[rmse_idx]
+                if np.all(self.benchmarky[i] != forecastedy):
+                    dm_r = dm_test(y, self.benchmarky[i], forecastedy, h=self.hsteps[i], crit="MSE")
+                    pvalue = dm_r[1]
+                    if pvalue <= 0.05 and self.star:
+                        rm[0 + skip2] = '{}*'.format(round(rm[0 + skip2], 4))
 
 
-            i = i + 1
-
-        i = 0
-        # Iterate through each h step ahead values for all UMAP. h = 1,3,6,12,24
-        skip = 3 * 2
-        skip2 = 7 * 2
-        for idx, (aic, pls, test, pm, rm, yhat, y) in enumerate(
-                zip(self.UMAP_AIC_BIC, self.UMAP_PLS, self.testset_UMAP_PLS, self.pm_store, self.rm_store,
-                    self.testset_UMAP_y_hat, self.testset_UMAP_y)):
-            min_BIC_idx = np.argmin(aic['BIC_t'])
-            pm[1 + skip, 0] = aic['m'][min_BIC_idx]
-            pm[1 + skip, 1] = aic['p'][min_BIC_idx]
-            rmse_idx = test.index[(test['m'] == pm[1 + skip, 0]) & (test['p'] == pm[1 + skip, 1])].tolist()[0]
-            rmse = test['Val RMSE'][rmse_idx]
-            rm[1 + skip2] = round(rmse / self.benchmark_rmse[idx], 4)
-            forecastedy = yhat[rmse_idx]
-            if np.all(self.benchmarky[i] != forecastedy):
-                dm_r = dm_test(y, self.benchmarky[i], forecastedy, h=self.hsteps[i], crit="MSE")
-                pvalue = dm_r[1]
-                if pvalue <= 0.05 and self.star:
-                    rm[1 + skip2] = '{}*'.format(round(rm[1 + skip2], 4))
+                min_idx = np.argmin(pls['Val RMSE'])
+                pm[2 + skip, 0] = pls['m'][min_idx]
+                pm[2 + skip, 1] = pls['p'][min_idx]
+                rmse_idx = test.index[(test['m'] == pm[2 + skip, 0]) & (test['p'] == pm[2 + skip, 1])].tolist()[0]
+                rmse = test['Val RMSE'][rmse_idx]
+                rm[2 + skip2] = round(rmse / self.benchmark_rmse[idx], 4)
+                forecastedy = yhat[rmse_idx]
+                if np.all(self.benchmarky[i] != forecastedy):
+                    dm_r = dm_test(y, self.benchmarky[i], forecastedy, h=self.hsteps[i], crit="MSE")
+                    pvalue = dm_r[1]
+                    if pvalue <= 0.05 and self.star:
+                        rm[2 + skip2] = '{}*'.format(round(rm[2 + skip2], 4))
 
 
-            min_AIC_idx = np.argmin(aic['AIC_t'])
-            pm[0 + skip, 0] = aic['m'][min_AIC_idx]
-            pm[0 + skip, 1] = aic['p'][min_AIC_idx]
-            rmse_idx = test.index[(test['m'] == pm[0 + skip, 0]) & (test['p'] == pm[0 + skip, 1])].tolist()[0]
-            rmse = test['Val RMSE'][rmse_idx]
-            rm[0 + skip2] = round(rmse / self.benchmark_rmse[idx], 4)
-            forecastedy = yhat[rmse_idx]
-            if np.all(self.benchmarky[i] != forecastedy):
-                dm_r = dm_test(y, self.benchmarky[i], forecastedy, h=self.hsteps[i], crit="MSE")
-                pvalue = dm_r[1]
-                if pvalue <= 0.05 and self.star:
-                    rm[0 + skip2] = '{}*'.format(round(rm[0 + skip2], 4))
+                i = i + 1
+
+            i = 0
+            # Iterate through each h step ahead values for all UMAP. h = 1,3,6,12,24
+            skip = 3 * 2
+            skip2 = 8 * 2
+            for idx, (aic, pls, test, pm, rm, yhat, y) in enumerate(
+                    zip(self.UMAP_AIC_BIC, self.UMAP_PLS, self.testset_UMAP_PLS, self.pm_store, self.rm_store,
+                        self.testset_UMAP_y_hat, self.testset_UMAP_y)):
+                min_BIC_idx = np.argmin(aic['BIC_t'])
+                pm[1 + skip, 0] = aic['m'][min_BIC_idx]
+                pm[1 + skip, 1] = aic['p'][min_BIC_idx]
+                rmse_idx = test.index[(test['m'] == pm[1 + skip, 0]) & (test['p'] == pm[1 + skip, 1])].tolist()[0]
+                rmse = test['Val RMSE'][rmse_idx]
+                rm[1 + skip2] = round(rmse / self.benchmark_rmse[idx], 4)
+                forecastedy = yhat[rmse_idx]
+                if np.all(self.benchmarky[i] != forecastedy):
+                    dm_r = dm_test(y, self.benchmarky[i], forecastedy, h=self.hsteps[i], crit="MSE")
+                    pvalue = dm_r[1]
+                    if pvalue <= 0.05 and self.star:
+                        rm[1 + skip2] = '{}*'.format(round(rm[1 + skip2], 4))
 
 
-            min_idx = np.argmin(pls['Val RMSE'])
-            pm[2 + skip, 0] = pls['m'][min_idx]
-            pm[2 + skip, 1] = pls['p'][min_idx]
-            rmse_idx = test.index[(test['m'] == pm[2 + skip, 0]) & (test['p'] == pm[2 + skip, 1])].tolist()[0]
-            rmse = test['Val RMSE'][rmse_idx]
-            rm[2 + skip2] = round(rmse / self.benchmark_rmse[idx], 4)
-            forecastedy = yhat[rmse_idx]
-            if np.all(self.benchmarky[i] != forecastedy):
-                dm_r = dm_test(y, self.benchmarky[i], forecastedy, h=self.hsteps[i], crit="MSE")
-                pvalue = dm_r[1]
-                if pvalue <= 0.05 and self.star:
-                    rm[2 + skip2] = '{}*'.format(round(rm[2 + skip2], 4))
+                min_AIC_idx = np.argmin(aic['AIC_t'])
+                pm[0 + skip, 0] = aic['m'][min_AIC_idx]
+                pm[0 + skip, 1] = aic['p'][min_AIC_idx]
+                rmse_idx = test.index[(test['m'] == pm[0 + skip, 0]) & (test['p'] == pm[0 + skip, 1])].tolist()[0]
+                rmse = test['Val RMSE'][rmse_idx]
+                rm[0 + skip2] = round(rmse / self.benchmark_rmse[idx], 4)
+                forecastedy = yhat[rmse_idx]
+                if np.all(self.benchmarky[i] != forecastedy):
+                    dm_r = dm_test(y, self.benchmarky[i], forecastedy, h=self.hsteps[i], crit="MSE")
+                    pvalue = dm_r[1]
+                    if pvalue <= 0.05 and self.star:
+                        rm[0 + skip2] = '{}*'.format(round(rm[0 + skip2], 4))
 
 
-            i = i + 1
+                min_idx = np.argmin(pls['Val RMSE'])
+                pm[2 + skip, 0] = pls['m'][min_idx]
+                pm[2 + skip, 1] = pls['p'][min_idx]
+                rmse_idx = test.index[(test['m'] == pm[2 + skip, 0]) & (test['p'] == pm[2 + skip, 1])].tolist()[0]
+                rmse = test['Val RMSE'][rmse_idx]
+                rm[2 + skip2] = round(rmse / self.benchmark_rmse[idx], 4)
+                forecastedy = yhat[rmse_idx]
+                if np.all(self.benchmarky[i] != forecastedy):
+                    dm_r = dm_test(y, self.benchmarky[i], forecastedy, h=self.hsteps[i], crit="MSE")
+                    pvalue = dm_r[1]
+                    if pvalue <= 0.05 and self.star:
+                        rm[2 + skip2] = '{}*'.format(round(rm[2 + skip2], 4))
 
-        pass
+
+                i = i + 1
+
+            pass
 
     def combination(self):
         """
@@ -296,7 +304,7 @@ class Postdata:
             for idx, (ic, pls, y, y_hat, rm) in enumerate(
                     zip(aic_bic_all_h, pls_all_h, testset_y, testset_y_hat, self.rm_store)):
                 # Simple average AVG
-                t_idx = 3 + 7 * skip_idx
+                t_idx = 3 + 8 * skip_idx
                 y_combi_hat = np.mean(y_hat, axis=0)
                 avg_y_hat.append(y_combi_hat)
                 rmse_combi = math.sqrt(np.mean(np.array(y - y_combi_hat) ** 2))
@@ -310,7 +318,7 @@ class Postdata:
 
                 # AWA
                 type = 'AIC_t'
-                t_idx = 4 + 7 * skip_idx
+                t_idx = 4 + 8 * skip_idx
                 ic_values = ic[type].values
                 min_ic = np.min(ic_values)
                 ic_values += -min_ic
@@ -329,7 +337,7 @@ class Postdata:
 
                 # BWA
                 type = 'BIC_t'
-                t_idx = 5 + 7 * skip_idx
+                t_idx = 5 + 8 * skip_idx
                 ic_values = ic[type].values
                 min_ic = np.min(ic_values)
                 ic_values += -min_ic
@@ -347,25 +355,33 @@ class Postdata:
 
 
                 # GR
-                t_idx = 6 + 7 * skip_idx
+                t_idx = 6 + 8 * skip_idx
                 y_pls = np.array(pls.columns.tolist()[5:])
                 y_hat_pls = pls.iloc[:, 5:].values
-                m = np.shape(y_hat_pls)[0] + 1  # number of models + 1 constant term
+                #m = np.shape(y_hat_pls)[0] + 1  # number of models + 1 constant term
+                m = np.shape(y_hat_pls)[0]  # number of models + 1 constant term
                 n = np.shape(y_hat_pls)[1]  # number of timesteps
                 beta = cp.Variable(shape=(m, 1))
 
-                pc_1 = np.ones((1, m - 1)) @ beta[1:, 0] == 1
+                # pc_1 = np.ones((1, m - 1)) @ beta[1:, 0] == 1
+                pc_1 = np.ones((1, m)) @ beta == 1
                 pc_2 = beta >= 0
                 constraints = [pc_1, pc_2]
 
-                X = np.concatenate((np.ones((n, 1)), y_hat_pls.T), axis=1)
-
+                # X = np.concatenate((np.ones((n, 1)), y_hat_pls.T), axis=1)
+                X = y_hat_pls.T
                 z = np.ones((1, n)) @ (y_pls[:, None] - X @ beta) ** 2
                 objective = cp.Minimize(z)
                 prob = cp.Problem(objective, constraints)
 
                 prob.solve(solver='GUROBI')
                 beta_hat = beta.value
+                '''
+                print('Skip_idx: {} idx: {} sum beta: {:.3E} min beta: {:.3E} max beta: {:.3E}'.format(skip_idx, idx,
+                                                                                                       np.sum(beta_hat),
+                                                                                                       np.min(beta_hat),
+                                                                                                       np.max(beta_hat)))
+                
                 print('Skip_idx: {} idx: {} sum beta: {:.3E} min beta: {:.3E} max beta: {:.3E}'.format(skip_idx, idx,
                                                                                                        np.sum(beta_hat[
                                                                                                               1:]),
@@ -373,7 +389,54 @@ class Postdata:
                                                                                                               1:]),
                                                                                                        np.max(beta_hat[
                                                                                                               1:])))
-                y_combi_hat = np.sum(y_hat * beta_hat[1:, 0][:, None] + beta_hat[0, 0], axis=0)
+                '''
+                y_combi_hat = np.sum(y_hat * beta_hat[:, 0][:, None], axis=0)
+                gr_y_hat.append(y_combi_hat)
+                rmse_combi = math.sqrt(np.mean(np.array(y - y_combi_hat) ** 2))
+                rm[t_idx] = round(rmse_combi / self.benchmark_rmse[idx], 4)
+                if np.all(self.benchmarky[i] != y_combi_hat):
+                    dm_r = dm_test(y, self.benchmarky[i], y_combi_hat, h=self.hsteps[i], crit="MSE")
+                    pvalue = dm_r[1]
+                    if pvalue <= 0.05 and self.star:
+                        rm[t_idx] = '{}*'.format(round(rm[t_idx], 4))
+
+                # GR with intercept
+                t_idx = 7 + 8 * skip_idx
+                y_pls = np.array(pls.columns.tolist()[5:])
+                y_hat_pls = pls.iloc[:, 5:].values
+                m = np.shape(y_hat_pls)[0] + 1  # number of models + 1 constant term
+                #m = np.shape(y_hat_pls)[0]  # number of models + 1 constant term
+                n = np.shape(y_hat_pls)[1]  # number of timesteps
+                beta = cp.Variable(shape=(m, 1))
+
+                pc_1 = np.ones((1, m - 1)) @ beta[1:, 0] == 1
+                # pc_1 = np.ones((1, m)) @ beta == 1
+                pc_2 = beta >= 0
+                constraints = [pc_1, pc_2]
+
+                X = np.concatenate((np.ones((n, 1)), y_hat_pls.T), axis=1)
+                # X = y_hat_pls.T
+                z = np.ones((1, n)) @ (y_pls[:, None] - X @ beta) ** 2
+                objective = cp.Minimize(z)
+                prob = cp.Problem(objective, constraints)
+
+                prob.solve(solver='GUROBI')
+                beta_hat = beta.value
+                '''
+                print('Skip_idx: {} idx: {} sum beta: {:.3E} min beta: {:.3E} max beta: {:.3E}'.format(skip_idx, idx,
+                                                                                                       np.sum(beta_hat),
+                                                                                                       np.min(beta_hat),
+                                                                                                       np.max(beta_hat)))
+
+                print('Skip_idx: {} idx: {} sum beta: {:.3E} min beta: {:.3E} max beta: {:.3E}'.format(skip_idx, idx,
+                                                                                                       np.sum(beta_hat[
+                                                                                                              1:]),
+                                                                                                       np.min(beta_hat[
+                                                                                                              1:]),
+                                                                                                       np.max(beta_hat[
+                                                                                                              1:])))
+                '''
+                y_combi_hat = np.sum(y_hat * beta_hat[1:, 0][:, None] + beta_hat[0,0], axis=0)
                 gr_y_hat.append(y_combi_hat)
                 rmse_combi = math.sqrt(np.mean(np.array(y - y_combi_hat) ** 2))
                 rm[t_idx] = round(rmse_combi / self.benchmark_rmse[idx], 4)
@@ -398,25 +461,28 @@ class Postdata:
             y_combi_hat = np.mean(np.concatenate((pca_y_hat, umap_y_hat), axis=0), axis=0)
             self.testset_PU_AVG_y_hat.append(y_combi_hat)
             rmse_combi = math.sqrt(np.mean(np.array(y - y_combi_hat) ** 2))
-            rm[21] = round(rmse_combi / self.benchmark_rmse[idx], 4)
+            rm[24] = round(rmse_combi / self.benchmark_rmse[idx], 4)
             if np.all(self.benchmarky[i] != y_combi_hat):
                 dm_r = dm_test(y, self.benchmarky[i], y_combi_hat, h=self.hsteps[i], crit="MSE")
                 pvalue = dm_r[1]
                 if pvalue <= 0.05 and self.star:
-                    rm[21] = '{}*'.format(round(rm[21], 4))
+                    rm[24] = '{}*'.format(round(rm[24], 4))
 
 
             # GR
             y_hat_pls = np.concatenate((pca_y_hat_pls, umap_y_hat_pls), axis=0)
-            m = np.shape(y_hat_pls)[0] + 1  # number of models + 1 constant term
+            #m = np.shape(y_hat_pls)[0] + 1  # number of models + 1 constant term
+            m = np.shape(y_hat_pls)[0]
             n = np.shape(y_hat_pls)[1]  # number of timesteps
             beta = cp.Variable(shape=(m, 1))
 
-            pc_1 = np.ones((1, m - 1)) @ beta[1:, 0] == 1
+            #pc_1 = np.ones((1, m - 1)) @ beta[1:, 0] == 1
+            pc_1 = np.ones((1, m)) @ beta== 1
             pc_2 = beta >= 0
             constraints = [pc_1, pc_2]
 
-            X = np.concatenate((np.ones((n, 1)), y_hat_pls.T), axis=1)
+            #X = np.concatenate((np.ones((n, 1)), y_hat_pls.T), axis=1)
+            X = y_hat_pls.T
 
             z = np.ones((1, n)) @ (y_pls[:, None] - X @ beta) ** 2
             objective = cp.Minimize(z)
@@ -424,27 +490,125 @@ class Postdata:
 
             prob.solve(solver='GUROBI')
             beta_hat = beta.value
+            '''
+            print('idx: {} sum beta: {:.3E} min beta: {:.3E} max beta: {:.3E}'.format( idx,
+                                                                                                   np.sum(beta_hat),
+                                                                                                   np.min(beta_hat),
+                                                                                                   np.max(beta_hat)))
+            
             print('idx: {} sum beta: {:.3E} min beta: {:.3E} max beta: {:.3E}'.format(idx,
                                                                                       np.sum(beta_hat[1:]),
                                                                                       np.min(beta_hat[1:]),
                                                                                       np.max(
                                                                                           beta_hat[1:])))
+            '''
             y_hat = np.concatenate((pca_y_hat, umap_y_hat), axis=0)
-            y_combi_hat = np.sum(y_hat * beta_hat[1:, 0][:, None] + beta_hat[0, 0], axis=0)
+            y_combi_hat = np.sum(y_hat * beta_hat[:, 0][:, None] , axis=0)
             self.testset_PU_GR_y_hat.append(y_combi_hat)
             rmse_combi = math.sqrt(np.mean(np.array(y - y_combi_hat) ** 2))
-            rm[22] = round(rmse_combi / self.benchmark_rmse[idx], 4)
+            rm[25] = round(rmse_combi / self.benchmark_rmse[idx], 4)
             if np.all(self.benchmarky[i] != y_combi_hat):
                 dm_r = dm_test(y, self.benchmarky[i], y_combi_hat, h=self.hsteps[i], crit="MSE")
                 pvalue = dm_r[1]
                 if pvalue <= 0.05 and self.star:
-                    rm[22] = '{}*'.format(round(rm[22], 4))
+                    rm[25] = '{}*'.format(round(rm[25], 4))
 
+            # GR with intercept
+            y_hat_pls = np.concatenate((pca_y_hat_pls, umap_y_hat_pls), axis=0)
+            m = np.shape(y_hat_pls)[0] + 1  # number of models + 1 constant term
+            # m = np.shape(y_hat_pls)[0]
+            n = np.shape(y_hat_pls)[1]  # number of timesteps
+            beta = cp.Variable(shape=(m, 1))
+
+            pc_1 = np.ones((1, m - 1)) @ beta[1:, 0] == 1
+            #pc_1 = np.ones((1, m)) @ beta == 1
+            pc_2 = beta >= 0
+            constraints = [pc_1, pc_2]
+
+            X = np.concatenate((np.ones((n, 1)), y_hat_pls.T), axis=1)
+            #X = y_hat_pls.T
+
+            z = np.ones((1, n)) @ (y_pls[:, None] - X @ beta) ** 2
+            objective = cp.Minimize(z)
+            prob = cp.Problem(objective, constraints)
+
+            prob.solve(solver='GUROBI')
+            beta_hat = beta.value
+            '''
+            print('idx: {} sum beta: {:.3E} min beta: {:.3E} max beta: {:.3E}'.format(idx,
+                                                                                      np.sum(beta_hat),
+                                                                                      np.min(beta_hat),
+                                                                                      np.max(beta_hat)))
+            
+            print('idx: {} sum beta: {:.3E} min beta: {:.3E} max beta: {:.3E}'.format(idx,
+                                                                                      np.sum(beta_hat[1:]),
+                                                                                      np.min(beta_hat[1:]),
+                                                                                      np.max(
+                                                                                          beta_hat[1:])))
+            '''
+            y_hat = np.concatenate((pca_y_hat, umap_y_hat), axis=0)
+            y_combi_hat = np.sum(y_hat * beta_hat[1:, 0][:, None]+ beta_hat[0,0], axis=0)
+            self.testset_PU_GR_y_hat.append(y_combi_hat)
+            rmse_combi = math.sqrt(np.mean(np.array(y - y_combi_hat) ** 2))
+            rm[26] = round(rmse_combi / self.benchmark_rmse[idx], 4)
+            if np.all(self.benchmarky[i] != y_combi_hat):
+                dm_r = dm_test(y, self.benchmarky[i], y_combi_hat, h=self.hsteps[i], crit="MSE")
+                pvalue = dm_r[1]
+                if pvalue <= 0.05 and self.star:
+                    rm[26] = '{}*'.format(round(rm[26], 4))
 
             i = i + 1
 
+        i = 0
+        # decomp_combi
+        def run_decomp_combi(subgroup_size, numel, rm_idx):
+            all_h_y_hat = [np.array(ar.tolist() + pca.tolist() + umap.tolist()) for ar, pca, umap in
+                           zip(self.testset_AR_y_hat, self.testset_PCA_y_hat, self.testset_UMAP_y_hat)]
+            model_count = [single_all_y_hat.shape[0] for single_all_y_hat in all_h_y_hat]
+            selections = [random.sample(list(range(model_count[0])), k=subgroup_size) for _ in range(numel)]
+            for idx, (single_all_y_hat, single_y, h_label, rm) in enumerate(zip(all_h_y_hat, self.testset_AR_y, self.hsteps, self.rm_store)):
+                # perform sub selection for each h step ahead
+                sub_y_hat_store = np.array([single_all_y_hat[selection, :] for selection in selections])
+                sub_y_mean_hat = np.mean(sub_y_hat_store, axis=1)
+                sub_y_invvar_hat = np.reciprocal(np.var(sub_y_hat_store, axis=1))
+                total_weights = np.sum(sub_y_invvar_hat, axis=0)
+                p_y = np.sum((1 / total_weights * sub_y_mean_hat * sub_y_invvar_hat), axis=0)
+                rm[rm_idx] = round(np.sqrt(np.average(np.square(p_y - single_y))) / self.benchmark_rmse[idx], 4)
+
+        subgroup_size = 20
+        numel = 50
+        rm_idx = 27
+        run_decomp_combi(subgroup_size=subgroup_size, numel=numel, rm_idx=rm_idx)
+
+        subgroup_size = 20
+        numel = 500
+        rm_idx = 28
+        run_decomp_combi(subgroup_size=subgroup_size, numel=numel, rm_idx=rm_idx)
+
+        subgroup_size = 20
+        numel = 5000
+        rm_idx = 29
+        run_decomp_combi(subgroup_size=subgroup_size, numel=numel, rm_idx=rm_idx)
+
+        subgroup_size = 10
+        numel = 50
+        rm_idx = 30
+        run_decomp_combi(subgroup_size=subgroup_size, numel=numel, rm_idx=rm_idx)
+
+        subgroup_size = 10
+        numel = 500
+        rm_idx = 31
+        run_decomp_combi(subgroup_size=subgroup_size, numel=numel, rm_idx=rm_idx)
+
+        subgroup_size = 10
+        numel = 5000
+        rm_idx = 32
+        run_decomp_combi(subgroup_size=subgroup_size, numel=numel, rm_idx=rm_idx)
+
+
         # Printing to excel
-        wb = openpyxl.Workbook()
+        excel_dir = create_excel_file('{}/pm_rm_results.xlsx'.format(self.results_dir))
+        wb = openpyxl.load_workbook(excel_dir)
         for idx in range(len(self.pm_store)):
             wb.create_sheet('h = {}'.format([1, 3, 6, 12, 24][idx]))
         sheet_names = wb.sheetnames
@@ -465,6 +629,6 @@ class Postdata:
                 for c_idx, value in enumerate(row, 1):
                     ws.cell(row=r_idx + 1 + skip, column=c_idx, value=value)
 
-        wb.save('{}/pm_rm_results.xlsx'.format(self.results_dir))
+        wb.save(excel_dir)
 
         pass
