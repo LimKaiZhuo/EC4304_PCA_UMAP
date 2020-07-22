@@ -17,6 +17,7 @@ from skopt.space import Real, Integer
 from skopt.utils import use_named_args
 
 from own_package.others import create_results_directory, print_df_to_excel
+from own_package.boosting import Xgboost
 
 
 def read_excel_data(excel_dir):
@@ -176,19 +177,19 @@ def hparam_selection(fl, model, type, bounds_m, bounds_p, h, h_idx, h_max, r, re
         if type == 'PLS':
             for m, p in hparams_store:
                 data_store_save_dir = create_results_directory('{}/{}_h{}'.format(results_dir, model, h))
-                y_hat, _, rmse = fl.multicore_pls_expanding_window(h=h, p=p, m=m, r=r,
-                                                                   cw_model_class=cw_model_class,
-                                                                   cw_hparams=cw_hparams,
-                                                                   x_t=fl.x_t,
-                                                                   x_v=fl.x_v,
-                                                                   yo_t=fl.yo_t,
-                                                                   y_t=fl.y_t[:, h_idx][..., None],
-                                                                   yo_v=fl.yo_v,
-                                                                   y_v=fl.y_v[:, h_idx][..., None],
-                                                                   rolling=rolling,
-                                                                   z_type=z_type,
-                                                                   save_dir=data_store_save_dir,
-                                                                   save_name=model)
+                y_hat, _, rmse, _ = fl.multicore_pls_expanding_window(h=h, p=p, m=m, r=r,
+                                                                      cw_model_class=cw_model_class,
+                                                                      cw_hparams=cw_hparams,
+                                                                      x_t=fl.x_t,
+                                                                      x_v=fl.x_v,
+                                                                      yo_t=fl.yo_t,
+                                                                      y_t=fl.y_t[:, h_idx][..., None],
+                                                                      yo_v=fl.yo_v,
+                                                                      y_v=fl.y_v[:, h_idx][..., None],
+                                                                      rolling=rolling,
+                                                                      z_type=z_type,
+                                                                      save_dir=data_store_save_dir,
+                                                                      save_name=model)
 
                 rmse_store.append(rmse)
                 y_hat_store.append(y_hat)
@@ -204,8 +205,12 @@ def hparam_selection(fl, model, type, bounds_m, bounds_p, h, h_idx, h_max, r, re
 
         elif type == 'k_fold':
             z_type = int(model[-1])
-            z_matrix, y_vec = fl.prepare_data_matrix(fl.x_t, fl.yo_t, fl.y_t[:, [h_idx]], h, m_max, p_max, z_type)
-            results_df = fl.xgb_hparam_opt(z=z_matrix, y=y_vec)
+            results_df = fl.xgb_hparam_opt(x=fl.x_t, yo=fl.yo_t, y=fl.y_t[:, [h_idx]], h=h, m_max=m_max, p_max=p_max,
+                                           z_type=z_type,
+                                           hparam_opt_params=kwargs['hparam_opt_params'],
+                                           cw_hparams=cw_hparams,
+                                           results_dir=results_dir,
+                                           model_name=model)
             try:
                 wb = openpyxl.load_workbook(f'{results_dir}/{model}_hparam_opt.xlsx')
             except FileNotFoundError:
@@ -351,8 +356,8 @@ class Fl_pca(Fl_master):
         super(Fl_pca, self).__init__(**kwargs)
         self.val_split = val_split
         self.y = y
-        (self.x_t, self.x_v), (self.yo_t, self.yo_v), (self.y_t, self.y_v), \
-        (self.ts_t, self.ts_v), (self.tidx_t, self.tidx_v), (self.nobs_t, self.nobs_v) = self.percentage_split(0.2)
+        (self.x_t, self.x_v), (self.yo_t, self.yo_v), (self.y_t, self.y_v), (self.ts_t, self.ts_v), (
+            self.tidx_t, self.tidx_v), (self.nobs_t, self.nobs_v) = self.percentage_split(val_split)
 
     def pca_factor_estimation(self, x, r, x_transformed_already=False):
         if not x_transformed_already:
@@ -573,8 +578,8 @@ class Fl_ar(Fl_master):
         super(Fl_ar, self).__init__(**kwargs)
         self.val_split = val_split
         self.y = y
-        (self.x_t, self.x_v), (self.yo_t, self.yo_v), (self.y_t, self.y_v), \
-        (self.ts_t, self.ts_v), (self.tidx_t, self.tidx_v), (self.nobs_t, self.nobs_v) = self.percentage_split(0.2)
+        (self.x_t, self.x_v), (self.yo_t, self.yo_v), (self.y_t, self.y_v), (self.ts_t, self.ts_v), (
+            self.tidx_t, self.tidx_v), (self.nobs_t, self.nobs_v) = self.percentage_split(val_split)
 
     def ar_prepare_data_matrix(self, yo, y, h, p):
         '''
@@ -702,8 +707,8 @@ class Fl_cw(Fl_master):
         super().__init__(**kwargs)
         self.val_split = val_split
         self.y = y
-        (self.x_t, self.x_v), (self.yo_t, self.yo_v), (self.y_t, self.y_v), \
-        (self.ts_t, self.ts_v), (self.tidx_t, self.tidx_v), (self.nobs_t, self.nobs_v) = self.percentage_split(0.2)
+        (self.x_t, self.x_v), (self.yo_t, self.yo_v), (self.y_t, self.y_v), (self.ts_t, self.ts_v), (
+            self.tidx_t, self.tidx_v), (self.nobs_t, self.nobs_v) = self.percentage_split(val_split)
 
     def prepare_data_matrix(self, x, yo, y, h, m, p, z_type):
         '''
@@ -888,10 +893,11 @@ class Fl_cw(Fl_master):
                         ('r', r),
                         ('z_type', z_type)])
         cw_data_store[0]['hparams'] = hparams
-        with open('{}/{}_h{}_all.pkl'.format(save_dir, save_name, h), "wb") as file:
-            pickle.dump(cw_data_store, file)
+        if save_dir:
+            with open('{}/{}_h{}_all.pkl'.format(save_dir, save_name, h), "wb") as file:
+                pickle.dump(cw_data_store, file)
 
-        return y_hat_store, e_hat_store, math.sqrt(np.mean(np.array(e_hat_store) ** 2))
+        return y_hat_store, e_hat_store, math.sqrt(np.mean(np.array(e_hat_store) ** 2)), cw_data_store
 
 
 class Fl_xgb(Fl_cw):
@@ -917,7 +923,7 @@ class Fl_xgb(Fl_cw):
             z_matrix, y_vec = self.prepare_data_matrix(x, yo, y, h, m, p, z_type)
             exog = z_matrix[-1:, :]
             cw_model.fit(deval=xgb.DMatrix(data=exog, label=y[[-1]]), plot_name=None)
-            y_1_hat = cw_model.predict(exog=exog).item()
+            y_1_hat = cw_model.predict(exog=exog, best_ntree_limit=cw_model.model.best_ntree_limit).item()
             e_1_hat = y[-1].item() - y_1_hat
 
             y_hat_store.append(y_1_hat)
@@ -927,7 +933,7 @@ class Fl_xgb(Fl_cw):
                 end = time.time()
                 if (idx) % 5 == 0:
                     try:
-                        print('Time taken for 5 steps CW PLS is {}'.format(end - start))
+                        print('Time taken for 5 steps CW PLS is {}'.format((end - start)*5))
                         with open('{}/{}_h{}_{}.pkl'.format(save_dir, save_name, h, idx), "wb") as file:
                             pickle.dump(data_store, file)
                     except:
@@ -949,7 +955,7 @@ class Fl_xgb(Fl_cw):
             with open('{}/{}_h{}_{}.pkl'.format(save_dir, save_name, h, idx), "wb") as file:
                 pickle.dump(data_store, file)
 
-        return y_hat_store, e_hat_store, math.sqrt(np.mean(np.array(e_hat_store) ** 2))
+        return y_hat_store, e_hat_store, math.sqrt(np.mean(np.array(e_hat_store) ** 2)), data_store
 
     def one_step_eval(self, arg, extra, idx):
         x, yo, y = arg
@@ -966,7 +972,7 @@ class Fl_xgb(Fl_cw):
 
         cw_model.fit(deval=xgb.DMatrix(data=exog, label=y[[-1]]), plot_name=plot_name)
 
-        y_1_hat = cw_model.predict(exog=exog).item()
+        y_1_hat = cw_model.predict(exog=exog, best_ntree_limit=cw_model.model.best_ntree_limit).item()
         e_1_hat = y[-1].item() - y_1_hat
 
         if save_dir:
@@ -981,32 +987,111 @@ class Fl_xgb(Fl_cw):
 
         return y_1_hat, e_1_hat, cw_model.return_data_dict()
 
-    def xgb_hparam_opt(self, z, y):
-        # Space should include 1) max_depth, 2) subsample, 3) colsample_bytree
-        space = [Integer(1, 6, name='max_depth'),
-                 Real(0.5, 1, name='subsample'),
-                 Real(0.5, 1, name='colsample_bytree'), ]
+    def val_rep_holdout(self, x, yo, y, h, z_type, n_blocks, hparams, **kwargs):
+        '''
+        rep_holdout evaluation method based on "Evaluating time series forecasting models".
+        Splits into train and val set by selecting n_blocks points on evenly spaced intervals between 60-90%.
+        For each train val pair, the xgb model is trained on train set and tested on the val set with early stopping.
+        The average optimal round is the average optimal rounds of all runs.
+        The average loss is calculated from all runs as well.
+        :param z:
+        :param y:
+        :param n_blocks:
+        :return:
+        '''
+        cut_points = np.linspace(start=0.95, stop=0.99, num=n_blocks)
+        z, y = self.prepare_data_matrix(x, yo, y, h, hparams['m'], hparams['m'] * 2, z_type)
+        T = z.shape[0]
+        score = []
+        n_rounds = []
+        for idx, cut in enumerate(cut_points):
+            cut = int(round(T * cut))
+            z_train = z[:cut, :]
+            z_test = z[cut:, :]
+            y_train = y[:cut, :]
+            y_test = y[cut:, :]
+            cw_model = Xgboost(z_matrix=z_train, y_vec=y_train, hparams=hparams, r=None)
+            cw_model.fit(deval=xgb.DMatrix(data=z_test, label=y_test), plot_name=f'./results/{idx}.png')
+            y_hat = cw_model.predict(exog=z_test, best_ntree_limit=cw_model.model.best_ntree_limit)
+            e_hat = y_test.squeeze() - y_hat
+            score.append(np.sqrt(np.mean(e_hat ** 2)))
+            n_rounds.append(cw_model.model.best_ntree_limit)
+        return np.mean(score), int(round(np.mean(n_rounds)))
+
+    def val_prequential(self, x, yo, y, h, z_type, cut_point, hparams, **kwargs):
+        '''
+        Prequential evaluation method based on "Evaluating time series forecasting models".
+        Similar to expanding window out of sample forecast.
+        Select one hparam then test it out on a single expanding window into the test set.
+        :param z:
+        :param y:
+        :param n_blocks:
+        :return:
+        '''
+        cut = int(round(x.shape[0] * cut_point))
+        t0 = time.perf_counter()
+        y_hat, _, rmse, cw_data_store = self.pls_expanding_window(h=h, p=hparams['m'] * 2, m=hparams['p'],
+                                                                            r=8,
+                                                                            cw_model_class=Xgboost,
+                                                                            cw_hparams=hparams,
+                                                                            x_t=x[:cut, :],
+                                                                            x_v=x[cut:, :],
+                                                                            yo_t=yo[:cut, :],
+                                                                            y_t=y[:cut, :],
+                                                                            yo_v=yo[cut:, :],
+                                                                            y_v=y[cut:, :],
+                                                                            rolling=False,
+                                                                            z_type=z_type,
+                                                                            save_dir=kwargs['save_dir'],
+                                                                            save_name=kwargs['save_name'])
+        rounds = int(round(np.mean([data['best_ntree_limit'] for data in cw_data_store])))
+        t1 = time.perf_counter()
+        print(f'Time taken for 1 hparam opt trial is {t1-t0}')
+        return rmse, rounds
+
+    def xgb_hparam_opt(self, x, yo, y, h, m_max, p_max, z_type, hparam_opt_params, cw_hparams, results_dir, model_name):
+        # Space should include 1) max_depth, 2) colsample_bytree
+        if hparam_opt_params['val_mode'] == 'rfcv':
+            z, y = self.prepare_data_matrix(x, yo, y, h, m_max, p_max, z_type)
+
+        space = []
+        for k, v in hparam_opt_params['variables'].items():
+            if v['type'] == 'Real':
+                space.append(Real(v['lower'], v['upper'], name=k))
+            elif v['type'] == 'Integer':
+                space.append(Integer(v['lower'], v['upper'], name=k))
+            else:
+                raise TypeError('hparam opt bounds variable type must be Real or Integer only.')
         n_rounds_store = []
 
         @use_named_args(space)
         def objective(**params):
-            full_params = {'booster': 'gbtree',
-                           'max_depth': 1,
-                           'learning_rate': 0.1,
-                           'objective': 'reg:squarederror',
-                           'verbosity': 0}
-            params = {**full_params, **params}
+            # Merge default hparams with optimizer trial hparams
+            params = {**cw_hparams, **params}
+            if hparam_opt_params['val_mode'] == 'rfcv':
+                cv_results = xgb.cv(params=params, dtrain=xgb.DMatrix(data=z, label=y),
+                                    nfold=hparam_opt_params['n_blocks'], num_boost_round=1500, early_stopping_rounds=50,
+                                    metrics='rmse', as_pandas=True, seed=42)
+                n_rounds_store.append(cv_results.shape[0])
+                score = cv_results['test-rmse-mean'].values[-1]
+            elif hparam_opt_params['val_mode'] == 'rep_holdout':
+                score, rounds = self.val_rep_holdout(x, yo, y, h, z_type, n_blocks=hparam_opt_params['n_blocks'],
+                                                     hparams=params)
+                n_rounds_store.append(rounds)
+            elif hparam_opt_params['val_mode'] == 'prequential':
+                score, rounds = self.val_prequential(x, yo, y, h, z_type, cut_point=hparam_opt_params['cut_point'],
+                                                     hparams=params,
+                                                     save_dir=results_dir,
+                                                     save_name=model_name)
+                n_rounds_store.append(rounds)
+            else:
+                raise TypeError('hparam opt params val mode is invalid.')
+            return score
 
-            cv_results = xgb.cv(params=params, dtrain=xgb.DMatrix(data=z, label=y),
-                                nfold=10, num_boost_round=1500, early_stopping_rounds=50,
-                                metrics='rmse', as_pandas=True, seed=42)
-            n_rounds_store.append(cv_results.shape[0])
-            return cv_results['test-rmse-mean'].values[-1]
-
-        res_gp = gp_minimize(objective, space, n_calls=100, random_state=42,
-                             x0=[[1, 1, 1],
-                                 [1, 0.9, 0.9],
-                                 [1, 1, 0.9]])
+        res_gp = gp_minimize(objective, space, random_state=42, acq_func='EI',
+                             n_calls=hparam_opt_params['n_calls'],
+                             n_random_starts=hparam_opt_params['n_random_starts'],
+                             )
         df = pd.DataFrame(data=np.concatenate((res_gp.x_iters,
                                                np.array(n_rounds_store)[:, None],
                                                res_gp.func_vals[:, None]),

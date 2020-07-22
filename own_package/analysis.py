@@ -131,7 +131,7 @@ def single_xgb_analysis(results_dir, plot_name):
     data_store = prepare_grand_data_store([results_dir], model='CW')
     test_rmse_store = np.array([data['progress']['h_step_ahead']['rmse'] for data in data_store])
     best_idx_store = list(np.argmin(test_rmse_store, axis=1))
-    predicted_idx = [30] * 5
+    predicted_idx = [7] * 5
     current_window = best_idx_store[:5]
     for y in best_idx_store[5:]:
         model = LocalLevel(current_window)

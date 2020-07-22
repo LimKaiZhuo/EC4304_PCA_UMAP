@@ -347,6 +347,7 @@ class Xgboost(Boost):
         self.progress = dict()
         dtrain = xgb.DMatrix(self.z_matrix, label=self.y_vec)
         self.model = xgb.train(self.hparams, dtrain=dtrain, num_boost_round=self.hparams['num_boost_round'],
+                               early_stopping_rounds=self.hparams['early_stopping_rounds'],
                                evals=[(dtrain, 'train'), (deval, 'h_step_ahead')], evals_result=self.progress,
                                verbose_eval=False)
         if plot_name:
@@ -357,11 +358,14 @@ class Xgboost(Boost):
             plt.savefig(f'{plot_name}_trainingcurve.png')
             plt.close()
 
-    def predict(self, exog):
-        return self.model.predict(xgb.DMatrix(exog))
+    def predict(self, exog, best_ntree_limit=None):
+        #if not best_ntree_limit:
+        #    best_ntree_limit = 0  # Use all trees
+        return self.model.predict(xgb.DMatrix(exog), ntree_limit=best_ntree_limit)
 
     def return_data_dict(self):
-        return {'progress': self.progress,}
+        return {'progress': self.progress,
+                'best_ntree_limit': self.model.best_ntree_limit}
 
 
 class SMwrapper(BaseEstimator, RegressorMixin):

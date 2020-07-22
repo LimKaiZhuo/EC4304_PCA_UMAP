@@ -129,15 +129,15 @@ def selector(case, excel_dir=None, var_name=None):
                         time_stamp=ts_tv, time_idx=tidx_tv,
                         features_names=fl_master.features_names, labels_names=fl_master.labels_names,
                         y_names=fl_master.y_names)
-        #h_steps = [24]
-        #h_idx_store = [4]  # h = 1 corresponds to h_idx=0, h=3 is h_idx=1, and so on
-        h_steps = [1, 3, 6, 12, 24]
-        h_idx_store = [0, 1, 2, 3, 4]
+        h_steps = [24]
+        h_idx_store = [4]  # h = 1 corresponds to h_idx=0, h=3 is h_idx=1, and so on
+        #h_steps = [1, 3, 6, 12, 24]
+        #h_idx_store = [0, 1, 2, 3, 4]
         # type_store = ['PLS', 'PLS', 'PLS']
         # model_store = ['CW1']
-        model_store = [f'XGB{x}' for x in [1,2,3,4,5,6]]
+        model_store = [f'XGB{x}' for x in [1]]
         # model_store =['CWd5','CWd6']
-        type_store = ['k_fold'] * len(model_store)
+        type_store = ['PLS'] * len(model_store)
         # type_store = ['AIC_BIC']
         # model_store = ['UMAP']
         for type, model in zip(type_store, model_store):
@@ -171,8 +171,8 @@ def selector(case, excel_dir=None, var_name=None):
                 kwargs = {'cw_model_class': ComponentwiseL2BoostDropout,
                           'cw_hparams': {'m_max': 5, 'learning_rate': 0.1, 'ic_mode': 'aic', 'dropout': 0.1}}
             elif model[:-1] == 'XGB':
-                bounds_m = [3, 3]
-                bounds_p = [12, 12]
+                bounds_m = [7,7]
+                bounds_p = [14,14]
                 fl = fl_xgb
                 kwargs = {'cw_model_class': Xgboost,
                           'cw_hparams': {'booster': 'gbtree',
@@ -185,16 +185,37 @@ def selector(case, excel_dir=None, var_name=None):
                                          'skip_drop': 0.5,
                                          'verbosity': 0}}
 
-                kwargs['cw_hparams'] = {'booster': 'gbtree',
-                                        'max_depth': 6,
+                kwargs['cw_hparams'] = {'booster': 'dart',
                                         'learning_rate': 0.1,
                                         'objective': 'reg:squarederror',
                                         'verbosity': 0,
                                         'subsample': 1,
-                                        'colsample_bytree':0.5,
-                                        'num_boost_round':236}
+                                        'num_boost_round': 500,
+                                        'early_stopping_rounds': None,
+                                        # DART params
+                                        'rate_drop':0.2,
+                                        'skip_drop':0.5,
+                                        # params that will vary
+                                        'm': 7,
+                                        'p': 14,
+                                        'max_depth': 1,
+                                        'colsample_bytree': 0.5,
+                                        }
+                kwargs['hparam_opt_params'] = {'hparam_mode': 'bo', 'n_calls': 80, 'n_random_starts': 60,
+                                               'val_mode': 'rep_holdout',
+                                               'n_blocks': 3, 'cut_point':0.97,
+                                               'variables': {'max_depth': {'type': 'Integer', 'lower': 1, 'upper': 6},
+                                                             'colsample_bytree': {'type': 'Real', 'lower': 0.5,
+                                                                                  'upper': 1},
+                                                             'm': {'type': 'Integer', 'lower': 1, 'upper': 24},
+                                                             #'p': {'type': 'Integer', 'lower': 1, 'upper': 48},
+                                                             #'gamma': {'type': 'Real', 'lower': 0.01, 'upper': 30}
+                                                             },
+                                               }
             else:
                 raise KeyError('Invalid model mode selected.')
+
+
 
             for h_idx, h in zip(h_idx_store, h_steps):
                 start = time.time()
@@ -223,9 +244,12 @@ def selector(case, excel_dir=None, var_name=None):
 if __name__ == '__main__':
     # selector(0)
     # selector(1)
-    #selector(4, excel_dir='./excel/dataset2/INDPRO_data_loader.xlsx', var_name='testset_INDxgb_hparam_opt ')
-    #selector(4, excel_dir='./excel/dataset2/W875RX1_data_loader.xlsx', var_name='testset_W875xgb_hparam_opt')
-    selector(4, excel_dir='./excel/dataset2/CPIAUCSL_data_loader.xlsx', var_name='testset_CPIAxgb_hparam_opt')
+    t0 = time.perf_counter()
+    selector(4, excel_dir='./excel/dataset2/INDPRO_data_loader.xlsx', var_name='testset_INDxgbd_rep_holdout')
+    t1 = time.perf_counter()
+    print(t1-t0)
+    # selector(4, excel_dir='./excel/dataset2/W875RX1_data_loader.xlsx', var_name='testset_W875xgb_hparam_opt')
+    #selector(4, excel_dir='./excel/dataset2/CPIAUCSL_data_loader.xlsx', var_name='testset_CPIAxgb_hparam_opt')
     # selector(3, excel_dir='./excel/DPC_data_loader.xlsx', var_name='DPC')
 
     # selector(3, excel_dir='./excel/WPSFD49207_data_loader.xlsx', var_name='WPSFD49207')
