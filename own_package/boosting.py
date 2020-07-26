@@ -348,7 +348,8 @@ class Xgboost(Boost):
         dtrain = xgb.DMatrix(self.z_matrix, label=self.y_vec)
         self.model = xgb.train(self.hparams, dtrain=dtrain, num_boost_round=self.hparams['num_boost_round'],
                                early_stopping_rounds=self.hparams['early_stopping_rounds'],
-                               evals=[(dtrain, 'train'), (deval, 'h_step_ahead')], evals_result=self.progress,
+                               evals=[(dtrain, 'train'), (deval, 'h_step_ahead')],
+                               evals_result=self.progress,
                                verbose_eval=False)
         if plot_name:
             plt.plot(self.progress['train']['rmse'], label='train')
