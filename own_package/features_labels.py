@@ -953,18 +953,7 @@ class Fl_xgb(Fl_cw):
             y_hat_store.append(y_1_hat)
             e_hat_store.append(e_1_hat)
 
-            if save_dir:
-                end = time.time()
-                if (idx) % 5 == 0:
-                    try:
-                        print('Time taken for 5 steps CW PLS is {}'.format((end - start)*5))
-                        with open('{}/{}_h{}_{}.pkl'.format(save_dir, save_name, h, idx), "wb") as file:
-                            pickle.dump(data_store, file)
-                    except:
-                        pass
-                    data_store = []
-                data_store.append(cw_model.return_data_dict())
-                start = time.time()
+            data_store.append(cw_model.return_data_dict())
 
             if idx + 1 == n_val:
                 break  # since last iteration, no need to waste time re-estimating model
@@ -976,9 +965,8 @@ class Fl_xgb(Fl_cw):
                 y = y[1:, :]
 
         if save_dir:
-            if idx % 5 != 0:
-                with open('{}/{}_h{}_{}.pkl'.format(save_dir, save_name, h, idx), "wb") as file:
-                    pickle.dump(data_store, file)
+            with open('{}/{}_h{}.pkl'.format(save_dir, save_name, h), "wb") as file:
+                pickle.dump(data_store, file)
 
         return y_hat_store, e_hat_store, math.sqrt(np.mean(np.array(e_hat_store) ** 2)), data_store
 

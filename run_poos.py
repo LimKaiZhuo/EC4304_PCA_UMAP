@@ -28,8 +28,8 @@ def selector(case, **kwargs):
                            'objective': 'reg:squarederror',
                            'verbosity': 0,
                            'subsample': 1,
-                           'num_boost_round': 15,
-                           'early_stopping_rounds': 10,
+                           'num_boost_round': 600,
+                           'early_stopping_rounds': 100,
                            # DART params
                            'rate_drop': 0.2,
                            'skip_drop': 0.5,
@@ -40,12 +40,11 @@ def selector(case, **kwargs):
                            'colsample_bytree': 0.5,
                            }
 
-        hparam_opt_params = {'hparam_mode': 'bo', 'n_calls': 15, 'n_random_starts': 5,
+        hparam_opt_params = {'hparam_mode': 'bo', 'n_calls': 70, 'n_random_starts': 50,
                              'val_mode': 'rep_holdout',
                              'n_blocks': 2, 'cut_point': 0.97,
                              'variables': {'max_depth': {'type': 'Integer', 'lower': 1, 'upper': 6},
-                                           'colsample_bytree': {'type': 'Real', 'lower': 0.5,
-                                                                'upper': 1},
+                                           'colsample_bytree': {'type': 'Real', 'lower': 0.5, 'upper': 1},
                                            'm': {'type': 'Integer', 'lower': 1, 'upper': 24},
                                            # 'p': {'type': 'Integer', 'lower': 1, 'upper': 48},
                                            # 'gamma': {'type': 'Real', 'lower': 0.01, 'upper': 30}
@@ -55,8 +54,16 @@ def selector(case, **kwargs):
                         m_max=12, p_max=24, model_mode='xgb', save_dir=results_dir,
                         default_hparams=default_hparams, hparam_opt_params=hparam_opt_params
                         )
+        poos_experiment(fl_master=fl_master, fl=fl_xgb, est_dates=est_dates, z_type=1, h=3, h_idx=1,
+                        m_max=12, p_max=24, model_mode='xgb', save_dir=results_dir,
+                        default_hparams=default_hparams, hparam_opt_params=hparam_opt_params
+                        )
+        poos_experiment(fl_master=fl_master, fl=fl_xgb, est_dates=est_dates, z_type=1, h=6, h_idx=2,
+                        m_max=12, p_max=24, model_mode='xgb', save_dir=results_dir,
+                        default_hparams=default_hparams, hparam_opt_params=hparam_opt_params
+                        )
     elif case == 2:
-        poos_analysis('./results/poos/poos_IND_test_20/poos_h1_all.pkl')
+        poos_analysis('./results/poos/poos_IND_test_26/poos_h1.pkl')
 
 
 if __name__ == '__main__':
