@@ -185,12 +185,12 @@ def selector(case, excel_dir=None, var_name=None):
                                          'skip_drop': 0.5,
                                          'verbosity': 0}}
 
-                kwargs['cw_hparams'] = {'booster': 'dart',
+                kwargs['cw_hparams'] = {'booster': 'gbtree',
                                         'learning_rate': 0.1,
                                         'objective': 'reg:squarederror',
                                         'verbosity': 0,
                                         'subsample': 1,
-                                        'num_boost_round': 500,
+                                        'num_boost_round': 50,
                                         'early_stopping_rounds': None,
                                         # DART params
                                         'rate_drop':0.2,

@@ -17,7 +17,7 @@ def selector(case, **kwargs):
                     excel_dir='./excel/dataset2/W875RX1_data_loader.xlsx')
         pass
     elif case == 1.1:
-        xgb_analysis('./results/testset_INDxgbd_rep_holdout_8')
+        xgb_analysis('./results/testset_INDxgbd_rep_holdout_9')
     elif case == 2:
         d = [6]
         h_store = zip([1, 3, 6, 12, 24], [0, 1, 2, 3, 4])

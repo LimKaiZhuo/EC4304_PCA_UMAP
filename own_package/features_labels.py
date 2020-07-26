@@ -208,7 +208,7 @@ def hparam_selection(fl, model, type, bounds_m, bounds_p, h, h_idx, h_max, r, re
             results_df = fl.xgb_hparam_opt(x=fl.x_t, yo=fl.yo_t, y=fl.y_t[:, [h_idx]], h=h, m_max=m_max, p_max=p_max,
                                            z_type=z_type,
                                            hparam_opt_params=kwargs['hparam_opt_params'],
-                                           cw_hparams=cw_hparams,
+                                           default_hparams=cw_hparams,
                                            results_dir=results_dir,
                                            model_name=model)
             try:
@@ -243,7 +243,7 @@ class Fl_master:
             self.y = y
             self.y_names = y_names
         self.yo = yo  # 2D ndarray of y original without cumulative changes
-        self.time_stamp = time_stamp  # 1D ndarray
+        self.time_stamp = [f'{x}:{y}' for x,y in zip(pd.DatetimeIndex(time_stamp).year, pd.DatetimeIndex(time_stamp).day)]  # 1D ndarray
         self.nobs, self.N = np.shape(x)  # Scalar X scalar
         if time_idx is not None:
             self.time_idx = time_idx
@@ -350,6 +350,29 @@ class Fl_master:
                (self.time_idx[:idx_split], self.time_idx[idx_split:]), \
                (idx_split, self.nobs - idx_split)
 
+    def date_split(self, date, date_start=None):
+        '''
+        Split data into two parts, first part is start date till date (inclusive), second part is everything after.
+        :param date: date to split set 1 and set 2
+        :param date_start: date to start set 1 from (exclusive)
+        :return:
+        '''
+        idx_split = self.time_stamp.index(date)+1
+        if date_start:
+            idx_start = self.time_stamp.index(date_start)+1
+            return (self.x[idx_start:idx_split, :], self.x[idx_split:, :]), \
+                   (self.yo[idx_start:idx_split, :], self.yo[idx_split:, :]), \
+                   (self.y[idx_start:idx_split, :], self.y[idx_split:, :]), \
+                   (self.time_stamp[idx_start:idx_split], self.time_stamp[idx_split:]), \
+                   (self.time_idx[idx_start:idx_split], self.time_idx[idx_split:]), \
+                   (idx_split-idx_start-1, self.nobs - idx_split)
+        else:
+            return (self.x[:idx_split, :], self.x[idx_split:, :]), \
+                   (self.yo[:idx_split, :], self.yo[idx_split:, :]), \
+                   (self.y[:idx_split, :], self.y[idx_split:, :]), \
+                   (self.time_stamp[:idx_split], self.time_stamp[idx_split:]), \
+                   (self.time_idx[:idx_split], self.time_idx[idx_split:]), \
+                   (idx_split, self.nobs - idx_split)
 
 class Fl_pca(Fl_master):
     def __init__(self, val_split, y, **kwargs):
@@ -704,11 +727,12 @@ class Fl_ar(Fl_master):
 
 class Fl_cw(Fl_master):
     def __init__(self, val_split, y, **kwargs):
-        super().__init__(**kwargs)
-        self.val_split = val_split
-        self.y = y
-        (self.x_t, self.x_v), (self.yo_t, self.yo_v), (self.y_t, self.y_v), (self.ts_t, self.ts_v), (
-            self.tidx_t, self.tidx_v), (self.nobs_t, self.nobs_v) = self.percentage_split(val_split)
+        if val_split:
+            super().__init__(**kwargs)
+            self.val_split = val_split
+            self.y = y
+            (self.x_t, self.x_v), (self.yo_t, self.yo_v), (self.y_t, self.y_v), (self.ts_t, self.ts_v), (
+                self.tidx_t, self.tidx_v), (self.nobs_t, self.nobs_v) = self.percentage_split(val_split)
 
     def prepare_data_matrix(self, x, yo, y, h, m, p, z_type):
         '''
@@ -907,7 +931,7 @@ class Fl_xgb(Fl_cw):
                              rolling=False):
         y_hat_store = []
         e_hat_store = []
-
+        data_store = []
         n_val = np.shape(x_v)[0]
         x = x_t
         yo = yo_t
@@ -929,18 +953,7 @@ class Fl_xgb(Fl_cw):
             y_hat_store.append(y_1_hat)
             e_hat_store.append(e_1_hat)
 
-            if save_dir:
-                end = time.time()
-                if (idx) % 5 == 0:
-                    try:
-                        print('Time taken for 5 steps CW PLS is {}'.format((end - start)*5))
-                        with open('{}/{}_h{}_{}.pkl'.format(save_dir, save_name, h, idx), "wb") as file:
-                            pickle.dump(data_store, file)
-                    except:
-                        pass
-                    data_store = []
-                data_store.append(cw_model.return_data_dict())
-                start = time.time()
+            data_store.append(cw_model.return_data_dict())
 
             if idx + 1 == n_val:
                 break  # since last iteration, no need to waste time re-estimating model
@@ -951,8 +964,8 @@ class Fl_xgb(Fl_cw):
                 yo = yo[1:, :]
                 y = y[1:, :]
 
-        if idx % 5 != 0:
-            with open('{}/{}_h{}_{}.pkl'.format(save_dir, save_name, h, idx), "wb") as file:
+        if save_dir:
+            with open('{}/{}_h{}.pkl'.format(save_dir, save_name, h), "wb") as file:
                 pickle.dump(data_store, file)
 
         return y_hat_store, e_hat_store, math.sqrt(np.mean(np.array(e_hat_store) ** 2)), data_store
@@ -1011,7 +1024,7 @@ class Fl_xgb(Fl_cw):
             y_train = y[:cut, :]
             y_test = y[cut:, :]
             cw_model = Xgboost(z_matrix=z_train, y_vec=y_train, hparams=hparams, r=None)
-            cw_model.fit(deval=xgb.DMatrix(data=z_test, label=y_test), plot_name=f'./results/{idx}.png')
+            cw_model.fit(deval=xgb.DMatrix(data=z_test, label=y_test), plot_name=None)#f'./results/{idx}.png')
             y_hat = cw_model.predict(exog=z_test, best_ntree_limit=cw_model.model.best_ntree_limit)
             e_hat = y_test.squeeze() - y_hat
             score.append(np.sqrt(np.mean(e_hat ** 2)))
@@ -1030,7 +1043,7 @@ class Fl_xgb(Fl_cw):
         '''
         cut = int(round(x.shape[0] * cut_point))
         t0 = time.perf_counter()
-        y_hat, _, rmse, cw_data_store = self.pls_expanding_window(h=h, p=hparams['m'] * 2, m=hparams['p'],
+        y_hat, _, rmse, cw_data_store = self.pls_expanding_window(h=h, p=hparams['m'] * 2, m=hparams['m'],
                                                                             r=8,
                                                                             cw_model_class=Xgboost,
                                                                             cw_hparams=hparams,
@@ -1049,7 +1062,7 @@ class Fl_xgb(Fl_cw):
         print(f'Time taken for 1 hparam opt trial is {t1-t0}')
         return rmse, rounds
 
-    def xgb_hparam_opt(self, x, yo, y, h, m_max, p_max, z_type, hparam_opt_params, cw_hparams, results_dir, model_name):
+    def xgb_hparam_opt(self, x, yo, y, h, m_max, p_max, z_type, hparam_opt_params, default_hparams, results_dir, model_name):
         # Space should include 1) max_depth, 2) colsample_bytree
         if hparam_opt_params['val_mode'] == 'rfcv':
             z, y = self.prepare_data_matrix(x, yo, y, h, m_max, p_max, z_type)
@@ -1064,28 +1077,41 @@ class Fl_xgb(Fl_cw):
                 raise TypeError('hparam opt bounds variable type must be Real or Integer only.')
         n_rounds_store = []
 
+        x_iters = []
+        func_vals = []
         @use_named_args(space)
         def objective(**params):
-            # Merge default hparams with optimizer trial hparams
-            params = {**cw_hparams, **params}
-            if hparam_opt_params['val_mode'] == 'rfcv':
-                cv_results = xgb.cv(params=params, dtrain=xgb.DMatrix(data=z, label=y),
-                                    nfold=hparam_opt_params['n_blocks'], num_boost_round=1500, early_stopping_rounds=50,
-                                    metrics='rmse', as_pandas=True, seed=42)
-                n_rounds_store.append(cv_results.shape[0])
-                score = cv_results['test-rmse-mean'].values[-1]
-            elif hparam_opt_params['val_mode'] == 'rep_holdout':
-                score, rounds = self.val_rep_holdout(x, yo, y, h, z_type, n_blocks=hparam_opt_params['n_blocks'],
-                                                     hparams=params)
+            try:
+                idx = x_iters.index(params)
+                score, rounds = func_vals[idx]
                 n_rounds_store.append(rounds)
-            elif hparam_opt_params['val_mode'] == 'prequential':
-                score, rounds = self.val_prequential(x, yo, y, h, z_type, cut_point=hparam_opt_params['cut_point'],
-                                                     hparams=params,
-                                                     save_dir=results_dir,
-                                                     save_name=model_name)
-                n_rounds_store.append(rounds)
-            else:
-                raise TypeError('hparam opt params val mode is invalid.')
+                print(f'Re-evaluated {params}')
+            except ValueError:
+                x_iters.append(params)
+                # Merge default hparams with optimizer trial hparams
+                params = {**default_hparams, **params}
+                if hparam_opt_params['val_mode'] == 'rfcv':
+                    cv_results = xgb.cv(params=params, dtrain=xgb.DMatrix(data=z, label=y),
+                                        nfold=hparam_opt_params['n_blocks'], num_boost_round=1500, early_stopping_rounds=50,
+                                        metrics='rmse', as_pandas=True, seed=42)
+                    rounds = cv_results.shape[0]
+                    n_rounds_store.append(rounds)
+                    score = cv_results['test-rmse-mean'].values[-1]
+                    func_vals.append((score, rounds))
+                elif hparam_opt_params['val_mode'] == 'rep_holdout':
+                    score, rounds = self.val_rep_holdout(x, yo, y, h, z_type, n_blocks=hparam_opt_params['n_blocks'],
+                                                         hparams=params)
+                    n_rounds_store.append(rounds)
+                    func_vals.append((score, rounds))
+                elif hparam_opt_params['val_mode'] == 'prequential':
+                    score, rounds = self.val_prequential(x, yo, y, h, z_type, cut_point=hparam_opt_params['cut_point'],
+                                                         hparams=params,
+                                                         save_dir=results_dir,
+                                                         save_name=model_name)
+                    n_rounds_store.append(rounds)
+                    func_vals.append((score, rounds))
+                else:
+                    raise TypeError('hparam opt params val mode is invalid.')
             return score
 
         res_gp = gp_minimize(objective, space, random_state=42, acq_func='EI',
