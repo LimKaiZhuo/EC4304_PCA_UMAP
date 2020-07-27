@@ -348,7 +348,15 @@ class Xgboost(Boost):
 
     def fit(self, deval, ehat_eval=None, plot_name=None):
         self.progress = dict()
-        dtrain = xgb.DMatrix(self.z_matrix, label=self.y_vec)
+        try:
+            if self.hparams['adap_gamma']:
+                # Adaptive trees
+                weights = np.exp(-10**self.hparams['adap_gamma']*(1-(np.arange(self.T)+1)/self.T))
+            else:
+                weights = None
+        except KeyError:
+            weights = None
+        dtrain = xgb.DMatrix(self.z_matrix, label=self.y_vec, weight=weights)
         self.model = xgb.train(self.hparams, dtrain=dtrain, num_boost_round=self.hparams['num_boost_round'],
                                early_stopping_rounds=self.hparams['early_stopping_rounds'],
                                feval=ehat_eval,
