@@ -334,6 +334,9 @@ class ComponentwiseL2BoostDropout(ComponentwiseL2Boost):
             plt.close()
 
 
+
+
+
 class Xgboost(Boost):
     def __init__(self, z_matrix, y_vec, hparams, r):
         super().__init__(z_matrix=z_matrix, y_vec=y_vec)
@@ -343,11 +346,12 @@ class Xgboost(Boost):
         self.ic_calculation_value = [2, np.log(self.T)]
         self.ic_cn_value = [2, np.log(self.N)]
 
-    def fit(self, deval, plot_name=None):
+    def fit(self, deval, ehat_eval=None, plot_name=None):
         self.progress = dict()
         dtrain = xgb.DMatrix(self.z_matrix, label=self.y_vec)
         self.model = xgb.train(self.hparams, dtrain=dtrain, num_boost_round=self.hparams['num_boost_round'],
                                early_stopping_rounds=self.hparams['early_stopping_rounds'],
+                               feval=ehat_eval,
                                evals=[(dtrain, 'train'), (deval, 'h_step_ahead')],
                                evals_result=self.progress,
                                verbose_eval=False)

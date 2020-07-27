@@ -3,6 +3,11 @@ import pandas as pd
 from own_package.boosting import Xgboost
 import pickle, time
 
+
+def forecast_error(y_predicted, y_true):
+    return 'ehat', np.sum(y_true.get_label()-y_predicted)
+
+
 def poos_experiment(fl_master, fl, est_dates, z_type, h, h_idx, m_max, p_max,
                     model_mode,
                     save_dir,
@@ -26,6 +31,7 @@ def poos_experiment(fl_master, fl, est_dates, z_type, h, h_idx, m_max, p_max,
             hparams['early_stopping_rounds'] = None
             hparams['m']=int(hparams['m'])
             hparams['max_depth'] = int(hparams['max_depth'])
+            hparams['ehat_eval'] = forecast_error
             _, _, _, poos_data_store = fl.pls_expanding_window(h=h, p=hparams['m']*2, m=hparams['m'], r=8,
                                                                          cw_model_class=Xgboost,
                                                                          cw_hparams=hparams,
@@ -50,9 +56,12 @@ def poos_experiment(fl_master, fl, est_dates, z_type, h, h_idx, m_max, p_max,
         print(f'Completed {est_date} for h={h}. Time taken {t2-t1}')
 
 
-def poos_analysis(save_dir):
+def poos_analysis(model_mode, save_dir):
     with open(save_dir, 'rb') as handle:
         data_store=pickle.load(handle)
+    if model_mode == 'xgb':
+        for data in data_store:
+            pass
 
     print(f'Loaded {save_dir}')
 

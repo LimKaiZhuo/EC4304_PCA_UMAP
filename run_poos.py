@@ -4,6 +4,8 @@ from own_package.features_labels import read_excel_data, read_excel_dataloader, 
     Fl_cw, Fl_xgb, hparam_selection
 
 
+
+
 def selector(case, **kwargs):
     if case == 1:
         # Run poos experiment
@@ -30,6 +32,8 @@ def selector(case, **kwargs):
                            'subsample': 1,
                            'num_boost_round': 600,
                            'early_stopping_rounds': 100,
+                           'ehat_eval':None,
+                           #'eval_metric':['rmse'],
                            # DART params
                            'rate_drop': 0.2,
                            'skip_drop': 0.5,
@@ -40,9 +44,9 @@ def selector(case, **kwargs):
                            'colsample_bytree': 0.5,
                            }
 
-        hparam_opt_params = {'hparam_mode': 'bo', 'n_calls': 70, 'n_random_starts': 50,
+        hparam_opt_params = {'hparam_mode': 'bo', 'n_calls': 80, 'n_random_starts': 50,
                              'val_mode': 'rep_holdout',
-                             'n_blocks': 2, 'cut_point': 0.97,
+                             'n_blocks': 3, 'cut_point': 0.95,
                              'variables': {'max_depth': {'type': 'Integer', 'lower': 1, 'upper': 6},
                                            'colsample_bytree': {'type': 'Real', 'lower': 0.5, 'upper': 1},
                                            'm': {'type': 'Integer', 'lower': 1, 'upper': 24},
@@ -63,8 +67,8 @@ def selector(case, **kwargs):
                         default_hparams=default_hparams, hparam_opt_params=hparam_opt_params
                         )
     elif case == 2:
-        poos_analysis('./results/poos/poos_IND_test_26/poos_h1.pkl')
+        poos_analysis(model_mode='xgb',save_dir='./results/poos/poos_IND_15/poos_h1.pkl')
 
 
 if __name__ == '__main__':
-    selector(case=2, excel_dir='./excel/dataset2/INDPRO_data_loader.xlsx', var_name='poos_IND_test')
+    selector(case=1, excel_dir='./excel/dataset2/W875RX1_data_loader.xlsx', var_name='poos_W875')

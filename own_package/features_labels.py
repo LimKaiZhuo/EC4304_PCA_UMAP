@@ -890,7 +890,8 @@ class Fl_cw(Fl_master):
     def multicore_pls_expanding_window(self, h, m, p, r, cw_model_class, cw_hparams, x_t, yo_t, y_t, x_v, yo_v, y_v,
                                        z_type,
                                        save_dir, save_name,
-                                       rolling=False):
+                                       rolling,
+                                       ):
         if z_type < 3:
             # Only dataset 3,4,5,6,7,8 has factors
             r = None
@@ -946,7 +947,7 @@ class Fl_xgb(Fl_cw):
             cw_model = cw_model_class(z_matrix=z_matrix, y_vec=y_vec, hparams=cw_hparams, r=r)
             z_matrix, y_vec = self.prepare_data_matrix(x, yo, y, h, m, p, z_type)
             exog = z_matrix[-1:, :]
-            cw_model.fit(deval=xgb.DMatrix(data=exog, label=y[[-1]]), plot_name=None)
+            cw_model.fit(deval=xgb.DMatrix(data=exog, label=y[[-1]]), ehat_eval=cw_hparams['ehat_eval'], plot_name=None)
             y_1_hat = cw_model.predict(exog=exog, best_ntree_limit=cw_model.model.best_ntree_limit).item()
             e_1_hat = y[-1].item() - y_1_hat
 
@@ -983,7 +984,7 @@ class Fl_xgb(Fl_cw):
         z_matrix, y_vec = self.prepare_data_matrix(x, yo, y, h, m, p, z_type)
         exog = z_matrix[-1:, :]
 
-        cw_model.fit(deval=xgb.DMatrix(data=exog, label=y[[-1]]), plot_name=plot_name)
+        cw_model.fit(deval=xgb.DMatrix(data=exog, label=y[[-1]]), ehat_eval=cw_hparams['ehat_eval'], plot_name=plot_name)
 
         y_1_hat = cw_model.predict(exog=exog, best_ntree_limit=cw_model.model.best_ntree_limit).item()
         e_1_hat = y[-1].item() - y_1_hat
@@ -1012,7 +1013,7 @@ class Fl_xgb(Fl_cw):
         :param n_blocks:
         :return:
         '''
-        cut_points = np.linspace(start=0.95, stop=0.99, num=n_blocks)
+        cut_points = np.linspace(start=0.75, stop=0.95, num=n_blocks)
         z, y = self.prepare_data_matrix(x, yo, y, h, hparams['m'], hparams['m'] * 2, z_type)
         T = z.shape[0]
         score = []
