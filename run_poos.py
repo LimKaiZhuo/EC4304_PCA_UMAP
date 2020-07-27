@@ -44,14 +44,14 @@ def selector(case, **kwargs):
                            'colsample_bytree': 0.5,
                            }
 
-        hparam_opt_params = {'hparam_mode': 'bo', 'n_calls': 80, 'n_random_starts': 50,
+        hparam_opt_params = {'hparam_mode': 'bo', 'n_calls': 200, 'n_random_starts': 150,
                              'val_mode': 'rep_holdout',
                              'n_blocks': 3, 'cut_point': 0.95,
                              'variables': {'max_depth': {'type': 'Integer', 'lower': 1, 'upper': 6},
                                            'colsample_bytree': {'type': 'Real', 'lower': 0.5, 'upper': 1},
                                            'm': {'type': 'Integer', 'lower': 1, 'upper': 24},
                                            # 'p': {'type': 'Integer', 'lower': 1, 'upper': 48},
-                                           # 'gamma': {'type': 'Real', 'lower': 0.01, 'upper': 30}
+                                           'adap_gamma': {'type': 'Real', 'lower': -2, 'upper': 1.5}
                                            },
                              }
         poos_experiment(fl_master=fl_master, fl=fl_xgb, est_dates=est_dates, z_type=1, h=1, h_idx=0,
@@ -67,7 +67,13 @@ def selector(case, **kwargs):
                         default_hparams=default_hparams, hparam_opt_params=hparam_opt_params
                         )
     elif case == 2:
-        poos_analysis(model_mode='xgb',save_dir='./results/poos/poos_IND_15/poos_h1.pkl')
+        excel_dir = kwargs['excel_dir']
+        output = read_excel_dataloader(excel_dir=excel_dir)
+        fl_master = Fl_master(x=output[0], features_names=output[1],
+                              yo=output[2], labels_names=output[3],
+                              y=output[4], y_names=output[5],
+                              time_stamp=output[6])
+        poos_analysis(fl_master=fl_master,model_mode='xgb',save_dir='./results/poos/poos_IND_15/poos_h1.pkl')
 
 
 if __name__ == '__main__':
