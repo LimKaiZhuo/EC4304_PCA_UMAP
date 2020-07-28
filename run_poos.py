@@ -22,7 +22,7 @@ def selector(case, **kwargs):
                         features_names=fl_master.features_names, labels_names=fl_master.labels_names,
                         y_names=fl_master.y_names)
 
-        est_dates = [f'{x}:12' for x in range(1969, 2020, 5)[:-1]]
+        est_dates = [f'{x}:12' for x in range(2014, 2020, 5)[:-1]]
 
         default_hparams = {'seed': 42,
                            'booster': 'gbtree',
@@ -54,18 +54,22 @@ def selector(case, **kwargs):
                                            'adap_gamma': {'type': 'Real', 'lower': -2, 'upper': 1.5}
                                            },
                              }
-        poos_experiment(fl_master=fl_master, fl=fl_xgb, est_dates=est_dates, z_type=1, h=1, h_idx=0,
+        poos_experiment(fl_master=fl_master, fl=fl_xgb, est_dates=est_dates, z_type=1, h=24, h_idx=4,
                         m_max=12, p_max=24, model_mode='xgb', save_dir=results_dir,
                         default_hparams=default_hparams, hparam_opt_params=hparam_opt_params
                         )
-        poos_experiment(fl_master=fl_master, fl=fl_xgb, est_dates=est_dates, z_type=1, h=3, h_idx=1,
-                        m_max=12, p_max=24, model_mode='xgb', save_dir=results_dir,
-                        default_hparams=default_hparams, hparam_opt_params=hparam_opt_params
-                        )
-        poos_experiment(fl_master=fl_master, fl=fl_xgb, est_dates=est_dates, z_type=1, h=6, h_idx=2,
-                        m_max=12, p_max=24, model_mode='xgb', save_dir=results_dir,
-                        default_hparams=default_hparams, hparam_opt_params=hparam_opt_params
-                        )
+        #poos_experiment(fl_master=fl_master, fl=fl_xgb, est_dates=est_dates, z_type=1, h=1, h_idx=0,
+        #                m_max=12, p_max=24, model_mode='xgb', save_dir=results_dir,
+        #                default_hparams=default_hparams, hparam_opt_params=hparam_opt_params
+        #                )
+        #poos_experiment(fl_master=fl_master, fl=fl_xgb, est_dates=est_dates, z_type=1, h=3, h_idx=1,
+        #                m_max=12, p_max=24, model_mode='xgb', save_dir=results_dir,
+        #                default_hparams=default_hparams, hparam_opt_params=hparam_opt_params
+        #                )
+        #poos_experiment(fl_master=fl_master, fl=fl_xgb, est_dates=est_dates, z_type=1, h=6, h_idx=2,
+        #                m_max=12, p_max=24, model_mode='xgb', save_dir=results_dir,
+        #                default_hparams=default_hparams, hparam_opt_params=hparam_opt_params
+        #                )
     elif case == 2:
         excel_dir = kwargs['excel_dir']
         output = read_excel_dataloader(excel_dir=excel_dir)
@@ -77,4 +81,4 @@ def selector(case, **kwargs):
 
 
 if __name__ == '__main__':
-    selector(case=1, excel_dir='./excel/dataset2/W875RX1_data_loader.xlsx', var_name='poos_W875')
+    selector(case=1, excel_dir='./excel/dataset2/W875RX1_data_loader.xlsx', var_name='poos_W875_xgba')

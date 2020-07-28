@@ -598,11 +598,12 @@ class Fl_pca(Fl_master):
 
 class Fl_ar(Fl_master):
     def __init__(self, val_split, y, **kwargs):
-        super(Fl_ar, self).__init__(**kwargs)
-        self.val_split = val_split
-        self.y = y
-        (self.x_t, self.x_v), (self.yo_t, self.yo_v), (self.y_t, self.y_v), (self.ts_t, self.ts_v), (
-            self.tidx_t, self.tidx_v), (self.nobs_t, self.nobs_v) = self.percentage_split(val_split)
+        if val_split:
+            super(Fl_ar, self).__init__(**kwargs)
+            self.val_split = val_split
+            self.y = y
+            (self.x_t, self.x_v), (self.yo_t, self.yo_v), (self.y_t, self.y_v), (self.ts_t, self.ts_v), (
+                self.tidx_t, self.tidx_v), (self.nobs_t, self.nobs_v) = self.percentage_split(val_split)
 
     def ar_prepare_data_matrix(self, yo, y, h, p):
         '''
@@ -621,13 +622,11 @@ class Fl_ar(Fl_master):
         y = y[-T + h + a - 1:, :]
         fy = yo[a - 1:T - h, :]
 
-        y_idx = self.time_idx[-T + h + a - 1:]
-
         if p >= 2:
             for idx in range(2, p + 1):
                 fy = np.concatenate((fy, yo[a - idx + 1 - 1:T - h - idx + 1, :]), axis=1)
 
-        return fy, y, y_idx
+        return fy, y
 
     '''
     NOT IN USE
@@ -660,7 +659,7 @@ class Fl_ar(Fl_master):
         # y = information set for transformed y to be forecasted.
         # yo_LM_t = original y lag matrix for training dataset
         # y_RO_t = y regression output for training dataset
-        yo_LM_t, y_RO_t, y_idx_t = self.ar_prepare_data_matrix(yo_t, y_t, h, p)
+        yo_LM_t, y_RO_t = self.ar_prepare_data_matrix(yo_t, y_t, h, p)
         ols_model = sm.OLS(endog=y_RO_t, exog=sm.add_constant(yo_LM_t))
 
         ols_model = ols_model.fit()
@@ -670,7 +669,7 @@ class Fl_ar(Fl_master):
             yo_t = np.concatenate((yo_t, np.array(yo_1)[None, ...]), axis=0)
             y_t = np.concatenate((y_t, np.array(y_1)[None, ...]), axis=0)
 
-            yo_LM_t, y_RO_t, y_idx_t = self.ar_prepare_data_matrix(yo_t, y_t, h, p)
+            yo_LM_t, y_RO_t = self.ar_prepare_data_matrix(yo_t, y_t, h, p)
             exog = yo_LM_t[-1, :][None, ...]
 
             y_1_hat = ols_model.predict(exog=np.concatenate((np.ones((1, 1)), exog), axis=1))
@@ -692,7 +691,7 @@ class Fl_ar(Fl_master):
                                    'bic': ols_model.bic}]
 
             if idx + 1 == n_val:
-                data_store[-1]['y_check'] = [y_v[0], y_v[-1]]
+
                 break  # since last iteration, no need to waste time re-estimating model
 
             if rolling:
