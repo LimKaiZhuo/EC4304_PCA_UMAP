@@ -346,7 +346,7 @@ class Xgboost(Boost):
         self.ic_calculation_value = [2, np.log(self.T)]
         self.ic_cn_value = [2, np.log(self.N)]
 
-    def fit(self, deval, ehat_eval=None, plot_name=None):
+    def fit(self, deval, ehat_eval=None, plot_name=None, feature_names=None):
         self.progress = dict()
         try:
             if self.hparams['adap_gamma']:
@@ -363,6 +363,7 @@ class Xgboost(Boost):
                                evals=[(dtrain, 'train'), (deval, 'h_step_ahead')],
                                evals_result=self.progress,
                                verbose_eval=False)
+
         if plot_name:
             plt.plot(self.progress['train']['rmse'], label='train')
             plt.plot(self.progress['h_step_ahead']['rmse'], label='h step ahead')
@@ -371,14 +372,23 @@ class Xgboost(Boost):
             plt.savefig(f'{plot_name}_trainingcurve.png')
             plt.close()
 
+        self.feature_names = feature_names
+
     def predict(self, exog, best_ntree_limit=None):
         #if not best_ntree_limit:
         #    best_ntree_limit = 0  # Use all trees
         return self.model.predict(xgb.DMatrix(exog), ntree_limit=best_ntree_limit)
 
     def return_data_dict(self):
-        return {'progress': self.progress,
-                'best_ntree_limit': self.model.best_ntree_limit}
+        if self.feature_names:
+            self.model.feature_names = self.feature_names
+            self.feature_score = self.model.get_score(importance_type='gain')
+            return {'feature_score': self.feature_score,
+                    'progress': self.progress,
+                    'best_ntree_limit': self.model.best_ntree_limit}
+        else:  # No feature score
+            return {'progress': self.progress,
+                    'best_ntree_limit': self.model.best_ntree_limit}
 
 
 class SMwrapper(BaseEstimator, RegressorMixin):

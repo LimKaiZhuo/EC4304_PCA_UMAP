@@ -243,7 +243,8 @@ class Fl_master:
             self.y = y
             self.y_names = y_names
         self.yo = yo  # 2D ndarray of y original without cumulative changes
-        self.time_stamp = [f'{x}:{y}' for x,y in zip(pd.DatetimeIndex(time_stamp).year, pd.DatetimeIndex(time_stamp).day)]  # 1D ndarray
+        self.time_stamp = [f'{x}:{y}' for x, y in
+                           zip(pd.DatetimeIndex(time_stamp).year, pd.DatetimeIndex(time_stamp).day)]  # 1D ndarray
         self.nobs, self.N = np.shape(x)  # Scalar X scalar
         if time_idx is not None:
             self.time_idx = time_idx
@@ -357,15 +358,15 @@ class Fl_master:
         :param date_start: date to start set 1 from (exclusive)
         :return:
         '''
-        idx_split = self.time_stamp.index(date)+1
+        idx_split = self.time_stamp.index(date) + 1
         if date_start:
-            idx_start = self.time_stamp.index(date_start)+1
+            idx_start = self.time_stamp.index(date_start) + 1
             return (self.x[idx_start:idx_split, :], self.x[idx_split:, :]), \
                    (self.yo[idx_start:idx_split, :], self.yo[idx_split:, :]), \
                    (self.y[idx_start:idx_split, :], self.y[idx_split:, :]), \
                    (self.time_stamp[idx_start:idx_split], self.time_stamp[idx_split:]), \
                    (self.time_idx[idx_start:idx_split], self.time_idx[idx_split:]), \
-                   (idx_split-idx_start-1, self.nobs - idx_split)
+                   (idx_split - idx_start - 1, self.nobs - idx_split)
         else:
             return (self.x[:idx_split, :], self.x[idx_split:, :]), \
                    (self.yo[:idx_split, :], self.yo[idx_split:, :]), \
@@ -373,6 +374,7 @@ class Fl_master:
                    (self.time_stamp[:idx_split], self.time_stamp[idx_split:]), \
                    (self.time_idx[:idx_split], self.time_idx[idx_split:]), \
                    (idx_split, self.nobs - idx_split)
+
 
 class Fl_pca(Fl_master):
     def __init__(self, val_split, y, **kwargs):
@@ -691,7 +693,6 @@ class Fl_ar(Fl_master):
                                    'bic': ols_model.bic}]
 
             if idx + 1 == n_val:
-
                 break  # since last iteration, no need to waste time re-estimating model
 
             if rolling:
@@ -732,8 +733,10 @@ class Fl_cw(Fl_master):
             self.y = y
             (self.x_t, self.x_v), (self.yo_t, self.yo_v), (self.y_t, self.y_v), (self.ts_t, self.ts_v), (
                 self.tidx_t, self.tidx_v), (self.nobs_t, self.nobs_v) = self.percentage_split(val_split)
+        else:
+            self.features_names = kwargs['features_names']
 
-    def prepare_data_matrix(self, x, yo, y, h, m, p, z_type):
+    def prepare_data_matrix(self, x, yo, y, h, m, p, z_type, feature_names=None):
         '''
 
         :param x: 2D ndarray of x. observation x dimension = N x r
@@ -796,7 +799,13 @@ class Fl_cw(Fl_master):
             for idx in range(2, p + 1):
                 fy = np.concatenate((fy, yo[a - idx + 1 - 1:T - h - idx + 1, :]), axis=1)
 
-        return sm.add_constant(np.concatenate((ff, fy), axis=1)), y
+        if feature_names is not None:
+            names = ['constant'] + [f'{feature}_L{idx}' for idx in range(m) for feature in feature_names] + [f'y_L{idx}'
+                                                                                                             for idx in
+                                                                                                             range(p)]
+            return sm.add_constant(np.concatenate((ff, fy), axis=1)), y, names
+        else:
+            return sm.add_constant(np.concatenate((ff, fy), axis=1)), y
 
     def pls_expanding_window(self, h, m, p, cw_model_class, cw_hparams, x_t, yo_t, y_t, x_v, yo_v, y_v, z_type,
                              rolling=False,
@@ -942,11 +951,13 @@ class Fl_xgb(Fl_cw):
             yo = np.concatenate((yo, np.array(yo_1)[None, ...]), axis=0)
             y = np.concatenate((y, np.array(y_1)[None, ...]), axis=0)
 
-            z_matrix, y_vec = self.prepare_data_matrix(x[:-1, :], yo[:-1, :], y[:-1, :], h, m, p, z_type)
+            z_matrix, y_vec, z_names = self.prepare_data_matrix(x[:-1, :], yo[:-1, :], y[:-1, :], h, m, p, z_type,
+                                                                feature_names=self.features_names)
             cw_model = cw_model_class(z_matrix=z_matrix, y_vec=y_vec, hparams=cw_hparams, r=r)
             z_matrix, y_vec = self.prepare_data_matrix(x, yo, y, h, m, p, z_type)
             exog = z_matrix[-1:, :]
-            cw_model.fit(deval=xgb.DMatrix(data=exog, label=y[[-1]]), ehat_eval=cw_hparams['ehat_eval'], plot_name=None)
+            cw_model.fit(deval=xgb.DMatrix(data=exog, label=y[[-1]]), ehat_eval=cw_hparams['ehat_eval'],
+                         plot_name=None, feature_names=z_names)
             y_1_hat = cw_model.predict(exog=exog, best_ntree_limit=cw_model.model.best_ntree_limit).item()
             e_1_hat = y[-1].item() - y_1_hat
 
@@ -983,7 +994,8 @@ class Fl_xgb(Fl_cw):
         z_matrix, y_vec = self.prepare_data_matrix(x, yo, y, h, m, p, z_type)
         exog = z_matrix[-1:, :]
 
-        cw_model.fit(deval=xgb.DMatrix(data=exog, label=y[[-1]]), ehat_eval=cw_hparams['ehat_eval'], plot_name=plot_name)
+        cw_model.fit(deval=xgb.DMatrix(data=exog, label=y[[-1]]), ehat_eval=cw_hparams['ehat_eval'],
+                     plot_name=plot_name)
 
         y_1_hat = cw_model.predict(exog=exog, best_ntree_limit=cw_model.model.best_ntree_limit).item()
         e_1_hat = y[-1].item() - y_1_hat
@@ -1024,7 +1036,7 @@ class Fl_xgb(Fl_cw):
             y_train = y[:cut, :]
             y_test = y[cut:, :]
             cw_model = Xgboost(z_matrix=z_train, y_vec=y_train, hparams=hparams, r=None)
-            cw_model.fit(deval=xgb.DMatrix(data=z_test, label=y_test), plot_name=None)#f'./results/{idx}.png')
+            cw_model.fit(deval=xgb.DMatrix(data=z_test, label=y_test), plot_name=None)  # f'./results/{idx}.png')
             y_hat = cw_model.predict(exog=z_test, best_ntree_limit=cw_model.model.best_ntree_limit)
             e_hat = y_test.squeeze() - y_hat
             score.append(np.sqrt(np.mean(e_hat ** 2)))
@@ -1044,25 +1056,26 @@ class Fl_xgb(Fl_cw):
         cut = int(round(x.shape[0] * cut_point))
         t0 = time.perf_counter()
         y_hat, _, rmse, cw_data_store = self.pls_expanding_window(h=h, p=hparams['m'] * 2, m=hparams['m'],
-                                                                            r=8,
-                                                                            cw_model_class=Xgboost,
-                                                                            cw_hparams=hparams,
-                                                                            x_t=x[:cut, :],
-                                                                            x_v=x[cut:, :],
-                                                                            yo_t=yo[:cut, :],
-                                                                            y_t=y[:cut, :],
-                                                                            yo_v=yo[cut:, :],
-                                                                            y_v=y[cut:, :],
-                                                                            rolling=False,
-                                                                            z_type=z_type,
-                                                                            save_dir=kwargs['save_dir'],
-                                                                            save_name=kwargs['save_name'])
+                                                                  r=8,
+                                                                  cw_model_class=Xgboost,
+                                                                  cw_hparams=hparams,
+                                                                  x_t=x[:cut, :],
+                                                                  x_v=x[cut:, :],
+                                                                  yo_t=yo[:cut, :],
+                                                                  y_t=y[:cut, :],
+                                                                  yo_v=yo[cut:, :],
+                                                                  y_v=y[cut:, :],
+                                                                  rolling=False,
+                                                                  z_type=z_type,
+                                                                  save_dir=kwargs['save_dir'],
+                                                                  save_name=kwargs['save_name'])
         rounds = int(round(np.mean([data['best_ntree_limit'] for data in cw_data_store])))
         t1 = time.perf_counter()
-        print(f'Time taken for 1 hparam opt trial is {t1-t0}')
+        print(f'Time taken for 1 hparam opt trial is {t1 - t0}')
         return rmse, rounds
 
-    def xgb_hparam_opt(self, x, yo, y, h, m_max, p_max, z_type, hparam_opt_params, default_hparams, results_dir, model_name):
+    def xgb_hparam_opt(self, x, yo, y, h, m_max, p_max, z_type, hparam_opt_params, default_hparams, results_dir,
+                       model_name):
         # Space should include 1) max_depth, 2) colsample_bytree
         if hparam_opt_params['val_mode'] == 'rfcv':
             z, y = self.prepare_data_matrix(x, yo, y, h, m_max, p_max, z_type)
@@ -1079,6 +1092,7 @@ class Fl_xgb(Fl_cw):
 
         x_iters = []
         func_vals = []
+
         @use_named_args(space)
         def objective(**params):
             try:
@@ -1092,7 +1106,8 @@ class Fl_xgb(Fl_cw):
                 params = {**default_hparams, **params}
                 if hparam_opt_params['val_mode'] == 'rfcv':
                     cv_results = xgb.cv(params=params, dtrain=xgb.DMatrix(data=z, label=y),
-                                        nfold=hparam_opt_params['n_blocks'], num_boost_round=1500, early_stopping_rounds=50,
+                                        nfold=hparam_opt_params['n_blocks'], num_boost_round=1500,
+                                        early_stopping_rounds=50,
                                         metrics='rmse', as_pandas=True, seed=42)
                     rounds = cv_results.shape[0]
                     n_rounds_store.append(rounds)
