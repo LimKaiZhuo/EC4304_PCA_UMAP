@@ -3,7 +3,7 @@ import pandas as pd
 import xgboost as xgb
 import statsmodels.api as sm
 import operator
-import openpyxl
+import openpyxl, shap
 import concurrent.futures
 import multiprocessing as mp
 import itertools, time
@@ -383,9 +383,17 @@ class Xgboost(Boost):
         if self.feature_names:
             self.model.feature_names = self.feature_names
             self.feature_score = self.model.get_score(importance_type='gain')
+            model = self.model.save_raw()[4:]
+            def myfun(self=None):
+                return model
+            self.model.save_raw = myfun
+            explainer = shap.TreeExplainer(self.model)
+            shap_values = csr_matrix(explainer.shap_values(self.z_matrix))
             return {'feature_score': self.feature_score,
                     'progress': self.progress,
-                    'best_ntree_limit': self.model.best_ntree_limit}
+                    'best_ntree_limit': self.model.best_ntree_limit,
+                    'feature_names': self.feature_names,
+                    'shap_values': shap_values}
         else:  # No feature score
             return {'progress': self.progress,
                     'best_ntree_limit': self.model.best_ntree_limit}

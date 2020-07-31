@@ -9,7 +9,7 @@ from sklearn.preprocessing import StandardScaler
 from scipy.linalg import eigh
 from openpyxl.utils.dataframe import dataframe_to_rows
 import openpyxl
-import umap
+import umap, shap
 import statsmodels.api as sm
 from sklearn.model_selection import cross_val_score
 from skopt import gp_minimize
