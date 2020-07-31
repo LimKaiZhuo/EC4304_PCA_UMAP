@@ -66,10 +66,7 @@ def selector(case, **kwargs):
                         m_max=12, p_max=24, model_mode='xgb', save_dir=results_dir,
                         default_hparams=default_hparams, hparam_opt_params=hparam_opt_params
                         )
-        poos_experiment(fl_master=fl_master, fl=fl_xgb, est_dates=est_dates, z_type=1, h=6, h_idx=2,
-                        m_max=12, p_max=24, model_mode='xgb', save_dir=results_dir,
-                        default_hparams=default_hparams, hparam_opt_params=hparam_opt_params
-                        )
+
     elif case == 2:
         excel_dir = kwargs['excel_dir']
         output = read_excel_dataloader(excel_dir=excel_dir)
