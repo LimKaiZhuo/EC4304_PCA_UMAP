@@ -22,12 +22,12 @@ def selector(case, **kwargs):
                               yo=output[2], labels_names=output[3],
                               y=output[4], y_names=output[5],
                               time_stamp=output[6])
-        h_store = [6, 24]
-        h_idx_store = [2,4]
+        h_store = [1]
+        h_idx_store = [0]
         for h, h_idx in zip(h_store, h_idx_store):
             poos_analysis(fl_master=fl_master, h=h, h_idx=h_idx, model_mode='xgb',
-                          results_dir='./results/poos/poos_W875_xgba',
-                          save_dir=f'./results/poos/poos_W875_xgba/poos_h{h}.pkl')
+                          results_dir='./results/poos/poos_CPIA_xgba',
+                          save_dir=f'./results/poos/poos_CPIA_xgba/poos_h{h}.pkl')
     elif case == 3:
         poos_processed_data_analysis(save_dir_store=['./results/poos/poos_W875_xgba/poos_xgb_h1_analysis_results.pkl',
                                                      './results/poos/poos_W875_xgba/poos_xgb_h3_analysis_results.pkl',
@@ -76,4 +76,4 @@ def selector(case, **kwargs):
                         )
 
 if __name__ == '__main__':
-    selector(case=3, excel_dir='./excel/dataset2/W875RX1_data_loader.xlsx', var_name='poos_AR4_W875')
+    selector(case=2, excel_dir='./excel/dataset2/W875RX1_data_loader.xlsx', var_name='poos_AR4_W875')

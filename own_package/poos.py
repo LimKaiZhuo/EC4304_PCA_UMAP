@@ -5,9 +5,10 @@ import matplotlib.pyplot as plt
 from own_package.boosting import Xgboost
 from own_package.analysis import LocalLevel
 from own_package.others import print_df_to_excel, create_excel_file
-import pickle, time
+import pickle, time, itertools
 
 first_est_date = '1970:1'
+
 
 def forecast_error(y_predicted, y_true):
     return 'ehat', np.sum(y_true.get_label() - y_predicted)
@@ -82,8 +83,8 @@ def poos_experiment(fl_master, fl, est_dates, z_type, h, h_idx, m_max, p_max,
 
         data_df = pd.DataFrame.from_dict({'time_stamp': ts,
                                           f'y_{h}': y,
-                                          'ar4_ehat': e_hat_store,}).set_index('time_stamp')
-        hparam_df = pd.DataFrame(data=np.array([4]*len(est_dates[:-1]))[...,None], columns=['p'])
+                                          'ar4_ehat': e_hat_store, }).set_index('time_stamp')
+        hparam_df = pd.DataFrame(data=np.array([4] * len(est_dates[:-1]))[..., None], columns=['p'])
         with open(f'{save_dir}/poos_{model_mode}_h{h}_analysis_results.pkl', "wb") as file:
             pickle.dump({'data_df': data_df, 'hparam_df': hparam_df}, file)
 
@@ -107,7 +108,19 @@ def poos_analysis(fl_master, h, h_idx, model_mode, results_dir, save_dir):
     with open(save_dir, 'rb') as handle:
         data_store = pickle.load(handle)
 
+    idx = fl_master.time_stamp.index(first_est_date)
+    y = fl_master.y[idx:, h_idx]
+    ts = fl_master.time_stamp[idx:]
+    ts_iter = iter(ts)
+
     if model_mode == 'xgb':
+        index_products = list(itertools.product(fl_master.features_names, list(range(24)))) + [('y', idx) for idx in
+                                                                                              range(48)]
+
+        index_products = [('y', str(idx)) for idx in range(3)]
+
+        score_df = pd.DataFrame(index=pd.MultiIndex.from_tuples(index_products, names=['Variable', 'Lag'])).T
+
         ae_store = []
         ehat_store = []
         optimal_ntree_store = []
@@ -115,6 +128,10 @@ def poos_analysis(fl_master, h, h_idx, model_mode, results_dir, save_dir):
         hparam_ntree_store = []
         block_store = []
         for idx, data in enumerate(data_store):
+            for single_step in data['poos_data_store']:
+                scores = {(k.partition('_L')[0], k.partition('_L')[-1]): v for k, v in single_step['feature_score'].items()}
+                score_df = score_df.append(scores, ignore_index=True)
+
             block_ae = [single_step['progress']['h_step_ahead']['rmse'] for single_step in data['poos_data_store']]
             block_store.extend([idx] * len(block_ae))
             block_ehat = [single_step['progress']['h_step_ahead']['ehat'] for single_step in data['poos_data_store']]
@@ -143,10 +160,6 @@ def poos_analysis(fl_master, h, h_idx, model_mode, results_dir, save_dir):
         hparam_rmse, hparam_ehat = calculate_horizon_rmse_ae(ae_store, ehat_store, hparam_ntree_store)
         ssm_rmse, ssm_ehat = calculate_horizon_rmse_ae(ae_store, ehat_store, predicted_ntree_store)
         ssm_full_rmse, ssm_full_ehat = calculate_horizon_rmse_ae(ae_store, ehat_store, ssm_full_ntree_store)
-
-        idx = fl_master.time_stamp.index(first_est_date)
-        y = fl_master.y[idx:, h_idx]
-        ts = fl_master.time_stamp[idx:]
 
         df = pd.DataFrame.from_dict({'time_stamp': ts,
                                      'hparam_block': block_store,
