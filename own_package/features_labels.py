@@ -378,11 +378,12 @@ class Fl_master:
 
 class Fl_pca(Fl_master):
     def __init__(self, val_split, y, **kwargs):
-        super(Fl_pca, self).__init__(**kwargs)
-        self.val_split = val_split
-        self.y = y
-        (self.x_t, self.x_v), (self.yo_t, self.yo_v), (self.y_t, self.y_v), (self.ts_t, self.ts_v), (
-            self.tidx_t, self.tidx_v), (self.nobs_t, self.nobs_v) = self.percentage_split(val_split)
+        if val_split:
+            super(Fl_pca, self).__init__(**kwargs)
+            self.val_split = val_split
+            self.y = y
+            (self.x_t, self.x_v), (self.yo_t, self.yo_v), (self.y_t, self.y_v), (self.ts_t, self.ts_v), (
+                self.tidx_t, self.tidx_v), (self.nobs_t, self.nobs_v) = self.percentage_split(val_split)
 
     def pca_factor_estimation(self, x, r, x_transformed_already=False):
         if not x_transformed_already:
@@ -401,11 +402,11 @@ class Fl_pca(Fl_master):
         loadings = pca.components_.T * math.sqrt(self.N)
         factors = x @ loadings / self.N
         '''
-
+        T, N = x.shape
         w, v = eigh(x.T @ x)
         loadings = np.fliplr(v[:, -r:])
-        loadings = loadings * math.sqrt(self.N)
-        factors = x @ loadings / self.N
+        loadings = loadings * math.sqrt(N)
+        factors = x @ loadings / N
         loadings_T = loadings.T
 
         '''
@@ -464,8 +465,6 @@ class Fl_pca(Fl_master):
         ff = factors[a - 1:T - h, :]
         fy = yo[a - 1:T - h, :]
 
-        x_idx = self.time_idx[a - 1:T - h]
-        y_idx = self.time_idx[-T + h + a - 1:]
 
         if m >= 2:
             for idx in range(2, m + 1):
@@ -475,7 +474,7 @@ class Fl_pca(Fl_master):
             for idx in range(2, p + 1):
                 fy = np.concatenate((fy, yo[a - idx + 1 - 1:T - h - idx + 1, :]), axis=1)
 
-        return ff, fy, y, x_idx, y_idx
+        return ff, fy, y
 
     '''
     NOT IN USE
@@ -509,7 +508,7 @@ class Fl_pca(Fl_master):
 
         # Training on train set first
         f_t, _ = factor_model(x=x_t, r=r)
-        f_LM_t, yo_LM_t, y_RO_t, x_idx_t, y_idx_t = self.pca_umap_prepare_data_matrix(f_t, yo_t, y_t, h, m, p)
+        f_LM_t, yo_LM_t, y_RO_t = self.pca_umap_prepare_data_matrix(f_t, yo_t, y_t, h, m, p)
         ols_model = sm.OLS(endog=y_RO_t, exog=sm.add_constant(np.concatenate((f_LM_t, yo_LM_t), axis=1)))
 
         ols_model = ols_model.fit()
@@ -522,7 +521,7 @@ class Fl_pca(Fl_master):
             f_t = np.concatenate((f_t, np.zeros((1, f_t.shape[1]))), axis=0)
 
             # f_t, _ = factor_model(x=x_t, r=r) SHOULD NOT RE-ESTIMATE FACTORS BEFORE FORECASTING
-            f_LM_t, yo_LM_t, y_RO_t, x_idx_t, y_idx_t = self.pca_umap_prepare_data_matrix(f_t, yo_t, y_t, h, m, p)
+            f_LM_t, yo_LM_t, y_RO_t= self.pca_umap_prepare_data_matrix(f_t, yo_t, y_t, h, m, p)
             exog = np.concatenate((f_LM_t, yo_LM_t), axis=1)[-1, :][None, ...]
 
             y_1_hat = ols_model.predict(exog=np.concatenate((np.ones((1, 1)), exog), axis=1))
@@ -552,7 +551,7 @@ class Fl_pca(Fl_master):
                 yo_t = yo_t[1:, :]
                 y_t = y_t[1:, :]
                 f_t, _ = factor_model(x=x_t, r=r)
-                f_LM_t, yo_LM_t, y_RO_t, x_idx_t, y_idx_t = self.pca_umap_prepare_data_matrix(f_t, yo_t, y_t, h, m, p)
+                f_LM_t, yo_LM_t, y_RO_t = self.pca_umap_prepare_data_matrix(f_t, yo_t, y_t, h, m, p)
 
             ols_model = sm.OLS(endog=y_RO_t, exog=sm.add_constant(np.concatenate((f_LM_t, yo_LM_t), axis=1)))
             ols_model = ols_model.fit()
@@ -565,7 +564,7 @@ class Fl_pca(Fl_master):
 
     def aic_bic_for_pca_umap(self, h, m, p, r, h_max, m_max, p_max, factor_model, x, yo, y):
         f, _ = factor_model(x=x, r=r)
-        f_LM, yo_LM, y, _, _ = self.pca_umap_prepare_data_matrix(f, yo, y, h, m, p)
+        f_LM, yo_LM, y = self.pca_umap_prepare_data_matrix(f, yo, y, h, m, p)
         T = np.shape(f)[0]
         a_max = max(m_max, p_max)
         if h < h_max or m < m_max or p < p_max:
@@ -596,6 +595,26 @@ class Fl_pca(Fl_master):
         print('Training results: Optimal factor dimension r = {}'.format(r))
 
         return r, ic_store
+
+    def pca_hparam_opt(self, x, yo, y, h, m_max, p_max, r):
+        def calculate_aic(x, yo, y, r, m, p):
+            f_t, _ = self.pca_factor_estimation(x=x, r=r)
+            f_LM_t, yo_LM_t, y_RO_t = self.pca_umap_prepare_data_matrix(f_t, yo, y, h, m, p)
+            ols_model = sm.OLS(endog=y_RO_t, exog=sm.add_constant(np.concatenate((f_LM_t, yo_LM_t), axis=1)))
+            ols_model = ols_model.fit()
+            return ols_model.aic
+
+        m_store = list(range(1, m_max + 1))
+        p_store = list(range(1, p_max + 1))
+        hparams_store = list(itertools.product(m_store, p_store))
+        aic_store = []
+        for (m,p) in hparams_store:
+            aic_store.append(calculate_aic(x,yo,y,r,m,p))
+
+        df = pd.DataFrame(data=np.concatenate((np.array(hparams_store), np.array(aic_store)[...,None]), axis=1),
+                          columns=['m', 'p', 'AIC']).sort_values('AIC')
+
+        return df
 
 
 class Fl_ar(Fl_master):
@@ -975,6 +994,7 @@ class Fl_xgb(Fl_cw):
                 yo = yo[1:, :]
                 y = y[1:, :]
 
+        data_store[0]['feature_names'] = z_names
         if save_dir:
             with open('{}/{}_h{}.pkl'.format(save_dir, save_name, h), "wb") as file:
                 pickle.dump(data_store, file)
