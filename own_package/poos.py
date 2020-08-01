@@ -5,13 +5,23 @@ import matplotlib.pyplot as plt
 from own_package.boosting import Xgboost
 from own_package.analysis import LocalLevel
 from own_package.others import print_df_to_excel, create_excel_file
-import pickle, time, itertools
+import pickle, time, itertools, shap
 
 first_est_date = '1970:1'
 
 
 def forecast_error(y_predicted, y_true):
     return 'ehat', np.sum(y_true.get_label() - y_predicted)
+
+
+class Shap_data:
+    def __init__(self, shap_matrix, feature_names):
+        df = pd.DataFrame(shap_matrix, columns=feature_names).iloc[:,1:].T  # Remove first column of constants
+        # Convert to multi index. Split name and lags
+        df.index = pd.MultiIndex.from_tuples(df.index.str.split('_L').tolist())
+        self.feature_names = feature_names
+        self.df = df.T  # Change back to multi-column
+        self.grouped_df = self.df.sum(level=0, axis=1)
 
 
 def poos_experiment(fl_master, fl, est_dates, z_type, h, h_idx, m_max, p_max,
@@ -65,6 +75,29 @@ def poos_experiment(fl_master, fl, est_dates, z_type, h, h_idx, m_max, p_max,
                               )
             with open('{}/poos_h{}.pkl'.format(save_dir, h), "wb") as file:
                 pickle.dump(data_store, file)
+
+        elif model_mode == 'pca':
+            hparams_df = fl.pca_hparam_opt(x=x_est, yo=yo_est, y=y_est[:, [h_idx]], h=h,
+                                           m_max=m_max, p_max=p_max, r=8)
+            hparams = hparams_df.iloc[0, :]
+            yhat, ehat, _, _ = fl.pls_expanding_window(h=h, p=int(hparams['p']), m=int(hparams['m']), r=8,
+                                                       factor_model=fl.pca_factor_estimation,
+                                                       x_t=x_est,
+                                                       x_v=x_tt,
+                                                       yo_t=yo_est,
+                                                       y_t=y_est[:, h_idx][..., None],
+                                                       yo_v=yo_tt,
+                                                       y_v=y_tt[:, h_idx][..., None],
+                                                       rolling=False,
+                                                       save_dir=None,
+                                                       save_name=None)
+            data_store.append({'est_date': est_date,
+                               'next_tune_date': next_tune_date,
+                               'hparams_df': hparams_df,
+                               'ehat': ehat,
+                               'yhat': yhat},
+                              )
+
         t2 = time.perf_counter()
         print(f'Completed {est_date} for h={h}. Time taken {t2 - t1}')
 
@@ -85,6 +118,19 @@ def poos_experiment(fl_master, fl, est_dates, z_type, h, h_idx, m_max, p_max,
                                           f'y_{h}': y,
                                           'ar4_ehat': e_hat_store, }).set_index('time_stamp')
         hparam_df = pd.DataFrame(data=np.array([4] * len(est_dates[:-1]))[..., None], columns=['p'])
+        with open(f'{save_dir}/poos_{model_mode}_h{h}_analysis_results.pkl', "wb") as file:
+            pickle.dump({'data_df': data_df, 'hparam_df': hparam_df}, file)
+    elif model_mode == 'pca':
+        hparam_df = pd.concat([data['hparams_df'].iloc[0, :] for data in data_store],axis=1).T
+
+        idx = fl_master.time_stamp.index(first_est_date)
+        y = fl_master.y[idx:, h_idx]
+        ts = fl_master.time_stamp[idx:]
+
+        data_df = pd.DataFrame.from_dict({'time_stamp': ts,
+                                          f'y_{h}': y,
+                                          'pca_ehat': [x for data in data_store for x in data['ehat']],
+                                          }).set_index('time_stamp')
         with open(f'{save_dir}/poos_{model_mode}_h{h}_analysis_results.pkl', "wb") as file:
             pickle.dump({'data_df': data_df, 'hparam_df': hparam_df}, file)
 

@@ -392,8 +392,8 @@ class Xgboost(Boost):
             return {'feature_score': self.feature_score,
                     'progress': self.progress,
                     'best_ntree_limit': self.model.best_ntree_limit,
-                    'feature_names': self.feature_names,
-                    'shap_values': shap_values}
+                    'shap_values': shap_values,
+                    'expected_value':explainer.expected_value}
         else:  # No feature score
             return {'progress': self.progress,
                     'best_ntree_limit': self.model.best_ntree_limit}

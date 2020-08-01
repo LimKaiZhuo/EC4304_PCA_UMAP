@@ -38,8 +38,8 @@ def selector(case, **kwargs):
                            'rate_drop': 0.2,
                            'skip_drop': 0.5,
                            # params that will vary
-                           'm': 7,
-                           'p': 14,
+                           'm': 6,
+                           'p': 12,
                            'max_depth': 1,
                            'colsample_bytree': 0.5,
                            }
@@ -49,7 +49,7 @@ def selector(case, **kwargs):
                              'n_blocks': 3, 'cut_point': 0.95,
                              'variables': {'max_depth': {'type': 'Integer', 'lower': 1, 'upper': 6},
                                            'colsample_bytree': {'type': 'Real', 'lower': 0.5, 'upper': 1},
-                                           'm': {'type': 'Integer', 'lower': 1, 'upper': 24},
+                                           #'m': {'type': 'Integer', 'lower': 1, 'upper': 24},
                                            # 'p': {'type': 'Integer', 'lower': 1, 'upper': 48},
                                            'adap_gamma': {'type': 'Real', 'lower': -2, 'upper': 1.5}
                                            },
@@ -78,4 +78,4 @@ def selector(case, **kwargs):
 
 
 if __name__ == '__main__':
-    selector(case=1, excel_dir='./excel/dataset2/INDPRO_data_loader.xlsx', var_name='poos_IND_xgba')
+    selector(case=1, excel_dir='./excel/dataset2/CPIAUCSL_data_loader.xlsx', var_name='poos_CPIA_xgbalow')
