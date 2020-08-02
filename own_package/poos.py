@@ -23,6 +23,13 @@ class Shap_data:
         self.df = df.T  # Change back to multi-column
         self.grouped_df = self.df.sum(level=0, axis=1)
 
+    def summary_plot(self, grouped=False, plot_type='bar'):
+        if grouped:
+            shap.summary_plot(self.grouped_df, feature_names=self.grouped_df.columns.values, plot_type=plot_type)
+        else:
+            shap.summary_plot(self.df, feature_names=self.df.columns.values, plot_type=plot_type)
+
+
 
 def poos_experiment(fl_master, fl, est_dates, z_type, h, h_idx, m_max, p_max,
                     model_mode,

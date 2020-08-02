@@ -22,18 +22,18 @@ def selector(case, **kwargs):
                               yo=output[2], labels_names=output[3],
                               y=output[4], y_names=output[5],
                               time_stamp=output[6])
-        h_store = [1,3,6,12,24]
-        h_idx_store = [0,1,2,3,4]
+        h_store = [1,3, 6,12,24]
+        h_idx_store = [0,1, 2,3,4]
         for h, h_idx in zip(h_store, h_idx_store):
             poos_analysis(fl_master=fl_master, h=h, h_idx=h_idx, model_mode='xgb',
                           results_dir='./results/poos/poos_IND_xgba',
                           save_dir=f'./results/poos/poos_IND_xgba/poos_h{h}.pkl')
     elif case == 3:
-        poos_processed_data_analysis(save_dir_store=['./results/poos/poos_IND_pca/poos_pca_h1_analysis_results.pkl',
-                                                     './results/poos/poos_IND_pca/poos_pca_h3_analysis_results.pkl',
-                                                     './results/poos/poos_IND_pca/poos_pca_h6_analysis_results.pkl',
-                                                     './results/poos/poos_IND_pca/poos_pca_h12_analysis_results.pkl',
-                                                     './results/poos/poos_IND_pca/poos_pca_h24_analysis_results.pkl',
+        poos_processed_data_analysis(save_dir_store=['./results/poos/poos_CPIA_xgbalow/poos_xgb_h1_analysis_results.pkl',
+                                                     './results/poos/poos_CPIA_xgbalow/poos_xgb_h3_analysis_results.pkl',
+                                                     './results/poos/poos_CPIA_xgbalow/poos_xgb_h6_analysis_results.pkl',
+                                                     './results/poos/poos_CPIA_xgbalow/poos_xgb_h12_analysis_results.pkl',
+                                                     './results/poos/poos_CPIA_xgbalow/poos_xgb_h24_analysis_results.pkl',
                                                      ],
                                      h_store=['1',
                                               '3',
@@ -41,7 +41,7 @@ def selector(case, **kwargs):
                                               '12',
                                               '24',
                                               ],
-                                     results_dir='./results/poos/poos_IND_pca')
+                                     results_dir='./results/poos/poos_CPIA_xgbalow')
     elif case == 4:
         # Run poos experiment
         var_name = kwargs['var_name']
@@ -78,4 +78,4 @@ def selector(case, **kwargs):
                         )
 
 if __name__ == '__main__':
-    selector(case=3, excel_dir='./excel/dataset2/INDPRO_data_loader.xlsx', var_name='poos_IND_ar4')
+    selector(case=2, excel_dir='./excel/dataset2/INDPRO_data_loader.xlsx', var_name='poos_IND_ar4')
