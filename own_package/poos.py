@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import statsmodels as sm
 import openpyxl
 import matplotlib.pyplot as plt
 from own_package.boosting import Xgboost
@@ -12,23 +13,6 @@ first_est_date = '1970:1'
 
 def forecast_error(y_predicted, y_true):
     return 'ehat', np.sum(y_true.get_label() - y_predicted)
-
-
-class Shap_data:
-    def __init__(self, shap_matrix, feature_names):
-        df = pd.DataFrame(shap_matrix, columns=feature_names).iloc[:,1:].T  # Remove first column of constants
-        # Convert to multi index. Split name and lags
-        df.index = pd.MultiIndex.from_tuples(df.index.str.split('_L').tolist())
-        self.feature_names = feature_names
-        self.df = df.T  # Change back to multi-column
-        self.grouped_df = self.df.sum(level=0, axis=1)
-
-    def summary_plot(self, grouped=False, plot_type='bar'):
-        if grouped:
-            shap.summary_plot(self.grouped_df, feature_names=self.grouped_df.columns.values, plot_type=plot_type)
-        else:
-            shap.summary_plot(self.df, feature_names=self.df.columns.values, plot_type=plot_type)
-
 
 
 def poos_experiment(fl_master, fl, est_dates, z_type, h, h_idx, m_max, p_max,
@@ -128,7 +112,7 @@ def poos_experiment(fl_master, fl, est_dates, z_type, h, h_idx, m_max, p_max,
         with open(f'{save_dir}/poos_{model_mode}_h{h}_analysis_results.pkl', "wb") as file:
             pickle.dump({'data_df': data_df, 'hparam_df': hparam_df}, file)
     elif model_mode == 'pca':
-        hparam_df = pd.concat([data['hparams_df'].iloc[0, :] for data in data_store],axis=1).T
+        hparam_df = pd.concat([data['hparams_df'].iloc[0, :] for data in data_store], axis=1).T
 
         idx = fl_master.time_stamp.index(first_est_date)
         y = fl_master.y[idx:, h_idx]
@@ -161,14 +145,28 @@ def poos_analysis(fl_master, h, h_idx, model_mode, results_dir, save_dir):
     with open(save_dir, 'rb') as handle:
         data_store = pickle.load(handle)
 
+    '''
+    h = 24
+    with open(f'./results/poos/poos_DPC_xgba/poos_h{h}a.pkl', 'rb') as handle:
+    a = pickle.load(handle)
+    
+    with open(f'./results/poos/poos_DPC_xgba/poos_h{h}b.pkl', 'rb') as handle:
+    b = pickle.load(handle)
+    
+    with open(f'./results/poos/poos_DPC_xgba/poos_h{h}c.pkl', 'rb') as handle:
+    c = pickle.load(handle)
+    
+    with open('./results/poos/poos_DPC_xgba/poos_h12.pkl', "wb") as file:
+    pickle.dump(data, file)
+    '''
+
     idx = fl_master.time_stamp.index(first_est_date)
     y = fl_master.y[idx:, h_idx]
     ts = fl_master.time_stamp[idx:]
-    ts_iter = iter(ts)
 
     if model_mode == 'xgb':
         index_products = list(itertools.product(fl_master.features_names, list(range(24)))) + [('y', idx) for idx in
-                                                                                              range(48)]
+                                                                                               range(48)]
 
         index_products = [('y', str(idx)) for idx in range(3)]
 
@@ -182,7 +180,8 @@ def poos_analysis(fl_master, h, h_idx, model_mode, results_dir, save_dir):
         block_store = []
         for idx, data in enumerate(data_store):
             for single_step in data['poos_data_store']:
-                scores = {(k.partition('_L')[0], k.partition('_L')[-1]): v for k, v in single_step['feature_score'].items()}
+                scores = {(k.partition('_L')[0], k.partition('_L')[-1]): v for k, v in
+                          single_step['feature_score'].items()}
                 score_df = score_df.append(scores, ignore_index=True)
 
             block_ae = [single_step['progress']['h_step_ahead']['rmse'] for single_step in data['poos_data_store']]
@@ -284,3 +283,82 @@ def poos_processed_data_analysis(results_dir, save_dir_store, h_store):
         print_df_to_excel(df=df, ws=ws)
 
     wb.save(excel_name)
+
+
+def poos_model_evaluation(ar_store, pca_store, xgb_store):
+    h_store = 1, 3, 6, 12, 24
+    results_store = {}
+    for h, ar, pca, xgb in zip(h_store, ar_store, pca_store, xgb_store):
+        with open(ar, 'rb') as handle:
+            ar_data = pickle.load(handle)
+
+        with open(pca, 'rb') as handle:
+            pca_data = pickle.load(handle)
+
+        with open(xgb, 'rb') as handle:
+            xgb_data = pickle.load(handle)
+
+        model_data = pd.concat([pca_data['data_df'], xgb_data['data_df']], axis=1)
+
+        d_vectors = (ar_data['data_df']['ar4_ehat'].values ** 2)[..., None] - \
+                    model_data[[x for x in model_data.columns.values if '_ehat' in x]].values ** 2
+
+        p_values = np.apply_along_axis(lambda x: sm.stats.diagnostic.acorr_ljungbox(x),
+                                       axis=0, arr=d_vectors)[1, int(np.round(np.sqrt(d_vectors.shape[0]))), :]
+
+        results_store[f'h{h}'] = p_values
+
+    results_df = pd.DataFrame.from_dict(results_store, orient='index',
+                                        columns=[x for x in model_data.columns.values if '_ehat' in x])
+
+
+class Shap_data:
+    def __init__(self, shap_matrix, feature_names):
+        df = pd.DataFrame(shap_matrix, columns=feature_names).iloc[:, 1:].T  # Remove first column of constants
+        # Convert to multi index. Split name and lags
+        df.index = pd.MultiIndex.from_tuples(df.index.str.split('_L').tolist())
+        self.feature_names = feature_names
+        self.df = df.T  # Change back to multi-column
+        self.grouped_df = self.df.abs().sum(level=0, axis=1)
+        self.shap_abs = self.df.abs().sum(axis=0)
+        self.grouped_shap_abs = self.grouped_df.sum(axis=0)
+
+    def summary_plot(self, grouped=False, plot_type='bar'):
+        if grouped:
+            shap.summary_plot(self.grouped_df, feature_names=self.grouped_df.columns.values, plot_type=plot_type)
+        else:
+            shap.summary_plot(self.df, feature_names=self.df.columns.values, plot_type=plot_type)
+
+
+def poos_shap(xgb_store):
+    for xgb_dir in xgb_store:
+        with open(xgb_dir, 'rb') as handle:
+            xgb_data = pickle.load(handle)
+
+        shap_abs = []
+        grouped_shap_abs = []
+
+        for block in xgb_data:
+            feature_names = block['poos_data_store'][0]['feature_names']
+            for step in block['poos_data_store']:
+                shap_data = Shap_data(shap_matrix=step['shap_values'].toarray(), feature_names=feature_names)
+                shap_abs.append(shap_data.shap_abs)
+                grouped_shap_abs.append(shap_data.grouped_shap_abs)
+
+        shap_abs = pd.concat(shap_abs, axis=1).T
+        gshap_abs = pd.concat(grouped_shap_abs, axis=1).T
+
+        def get_top_columns_per_row(df, n_top):
+            ranked_matrix = np.argsort(-df.values, axis=1)[:, :n_top]
+            return pd.DataFrame(df.columns.values[ranked_matrix],
+                                index=df.index,
+                                columns=[f'Rank {idx + 1}' for idx in range(n_top)]), \
+                   pd.DataFrame(df.values[np.repeat(np.arange(df.shape[0])[:, None], n_top, axis=1), ranked_matrix],
+                                index=df.index,
+                                columns=[f'Rank {idx + 1}' for idx in range(n_top)])
+
+        top_shap_names, top_shap_values = get_top_columns_per_row(df=shap_abs, n_top=10)
+        top_gshap_names, top_gshap_values = get_top_columns_per_row(df=gshap_abs, n_top=10)
+
+        gshap_abs_norm = gshap_abs.div(gshap_abs.max(axis=1), axis=0)
+        gshap_abs.plot(y=np.unique(top_gshap_names.values))
