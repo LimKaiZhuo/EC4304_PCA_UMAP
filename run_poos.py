@@ -22,7 +22,7 @@ def selector(case, **kwargs):
                         features_names=fl_master.features_names, labels_names=fl_master.labels_names,
                         y_names=fl_master.y_names)
 
-        est_dates = [f'{x}:12' for x in range(2004, 2020, 5)[:-1]]
+        est_dates = [f'{x}:12' for x in range(1969, 2020, 5)[:-1]]
 
         default_hparams = {'seed': 42,
                            'booster': 'gbtree',
@@ -87,4 +87,4 @@ def selector(case, **kwargs):
 
 
 if __name__ == '__main__':
-    selector(case=1, excel_dir='./excel/dataset2/DPCERA3M086SBEA_data_loader.xlsx', var_name='poos_DPC_xgba')
+    selector(case=1, excel_dir='./excel/dataset2/PAYEMS_data_loader.xlsx', var_name='poos_PAY_xgba')
