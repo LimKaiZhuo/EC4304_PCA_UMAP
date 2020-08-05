@@ -1,6 +1,7 @@
 import numpy as np
+from scipy.linalg import fractional_matrix_power
 import pandas as pd
-import statsmodels as sm
+import statsmodels.api as sm
 import openpyxl
 import matplotlib.pyplot as plt
 from own_package.boosting import Xgboost
@@ -88,13 +89,28 @@ def poos_experiment(fl_master, fl, est_dates, z_type, h, h_idx, m_max, p_max,
                                'ehat': ehat,
                                'yhat': yhat},
                               )
+        elif model_mode == 'ar':
+            hparams_df = fl.ar_hparam_opt(yo=yo_est, y=y_est[:, [h_idx]], h=h, p_max=p_max,)
+            hparams = hparams_df.iloc[0, :]
+            yhat, ehat, _, _ = fl.ar_pls_expanding_window(h=h, p=int(hparams['p']),
+                                                          yo_t=yo_est,
+                                                          y_t=y_est[:, h_idx][..., None],
+                                                          yo_v=yo_tt,
+                                                          y_v=y_tt[:, h_idx][..., None], rolling=False,
+                                                          save_dir=None, save_name=None)
+            data_store.append({'est_date': est_date,
+                               'next_tune_date': next_tune_date,
+                               'hparams_df': hparams_df,
+                               'ehat': ehat,
+                               'yhat': yhat},
+                              )
 
         t2 = time.perf_counter()
         print(f'Completed {est_date} for h={h}. Time taken {t2 - t1}')
 
     if model_mode == 'ar4':
         _, (yo_est, yo_tt), (y_est, y_tt), (ts_est, ts_tt), _, _ = fl_master.date_split(est_dates[0])
-        _, e_hat_store, _, _ = fl.ar_pls_expanding_window(h=h, p=4, r=8,
+        _, e_hat_store, _, _ = fl.ar_pls_expanding_window(h=h, p=4,
                                                           yo_t=yo_est,
                                                           y_t=y_est[:, h_idx][..., None],
                                                           yo_v=yo_tt,
@@ -111,7 +127,8 @@ def poos_experiment(fl_master, fl, est_dates, z_type, h, h_idx, m_max, p_max,
         hparam_df = pd.DataFrame(data=np.array([4] * len(est_dates[:-1]))[..., None], columns=['p'])
         with open(f'{save_dir}/poos_{model_mode}_h{h}_analysis_results.pkl', "wb") as file:
             pickle.dump({'data_df': data_df, 'hparam_df': hparam_df}, file)
-    elif model_mode == 'pca':
+
+    elif model_mode in ['pca', 'ar']:
         hparam_df = pd.concat([data['hparams_df'].iloc[0, :] for data in data_store], axis=1).T
 
         idx = fl_master.time_stamp.index(first_est_date)
@@ -120,7 +137,7 @@ def poos_experiment(fl_master, fl, est_dates, z_type, h, h_idx, m_max, p_max,
 
         data_df = pd.DataFrame.from_dict({'time_stamp': ts,
                                           f'y_{h}': y,
-                                          'pca_ehat': [x for data in data_store for x in data['ehat']],
+                                          f'{model_mode}_ehat': [x for data in data_store for x in data['ehat']],
                                           }).set_index('time_stamp')
         with open(f'{save_dir}/poos_{model_mode}_h{h}_analysis_results.pkl', "wb") as file:
             pickle.dump({'data_df': data_df, 'hparam_df': hparam_df}, file)
@@ -241,7 +258,7 @@ def poos_analysis(fl_master, h, h_idx, model_mode, results_dir, save_dir):
             pickle.dump({'data_df': df, 'rmse_df': rmse_df, 'hparam_df': hparam_df}, file)
 
 
-def poos_processed_data_analysis(results_dir, save_dir_store, h_store):
+def poos_processed_data_analysis(results_dir, save_dir_store, h_store, model_mode):
     first_est_date = '1970:1'
     est_dates = [f'{x}:12' for x in range(1969, 2020, 5)[1:-1]]
     df_store = []
@@ -275,7 +292,7 @@ def poos_processed_data_analysis(results_dir, save_dir_store, h_store):
         df['end_dates'] = est_dates + [time_stamps[-1]] + end_store
         df_store.append(df)
 
-    excel_name = create_excel_file(f'{results_dir}/poos_analysis.xlsx')
+    excel_name = create_excel_file(f'{results_dir}/poos_analysis_{model_mode}.xlsx')
     wb = openpyxl.Workbook()
     for df, h in zip(df_store, h_store):
         wb.create_sheet(f'h{h}')
@@ -285,9 +302,62 @@ def poos_processed_data_analysis(results_dir, save_dir_store, h_store):
     wb.save(excel_name)
 
 
-def poos_model_evaluation(ar_store, pca_store, xgb_store):
+def poos_model_evaluation(ar_store, pca_store, xgb_store, results_dir):
+    def xl_test(x):
+        n = x.shape[0]
+        u = x - x.mean()
+        sigma = (x**2).mean()
+        v = u**2 - sigma
+        z = np.concatenate((u[None,:],v[None,:]), axis=0)
+        ar1_model = sm.tsa.ARMA(u, (1,0)).fit(disp=False)
+        rho = abs(ar1_model.params[1])
+        q = int(np.round((1.5*n)**(1/3)*(2*rho/(1-rho**2))**(2/3)))
+
+        sum_uu = 0
+        sum_uv = 0
+        sum_vu = 0
+        sum_vv = 0
+        for h in range(1, q+1):
+            g_uu = 1/n*np.sum(u[h:]*u[:-h])
+            g_uv = 1/n*np.sum(u[h:]*v[:-h])
+            g_vu = 1/n*np.sum(v[h:]*u[:-h])
+            g_vv = 1/n*np.sum(v[h:]*v[:-h])
+            sum_uu += (1-h/(q+1))*g_uu
+            sum_uv += (1 - h / (q + 1)) * g_uv
+            sum_vu += (1 - h / (q + 1)) * g_vu
+            sum_vv += (1 - h / (q + 1)) * g_vv
+
+        g_uu_0 = 1 / n * np.sum(u * u)
+        g_uv_0 = 1 / n * np.sum(u * v)
+        g_vv_0 = 1 / n * np.sum(v * v)
+
+        w_u = g_uu_0+2*sum_uu
+        w_v = g_vv_0+2*sum_vv
+        w_uv = g_uv_0 + sum_uv + sum_vu
+        if w_uv<0:
+            print('w_uv is negative')
+        omega = np.array([[w_u, abs(w_uv)**0.5], [abs(w_uv)**0.5, w_v]])
+        omega_neghalf = fractional_matrix_power(omega, -0.5)
+
+        sequence = np.empty_like(z)
+        z_cumsum = np.cumsum(z, axis=1)
+        for i in range(z.shape[1]):
+            sequence[:, i ] = omega_neghalf@z_cumsum[:,i]
+
+        c = 1/n**0.5 * np.max(np.linalg.norm(sequence, ord=1, axis=0))
+        if c<=1.89:
+            p = 0.1
+        elif c<=2.07:
+            p=0.05
+        elif c<=2.4:
+            p=0.01
+        else:
+            p=0
+        return p
+
     h_store = 1, 3, 6, 12, 24
     results_store = {}
+    results_xl_store = {}
     for h, ar, pca, xgb in zip(h_store, ar_store, pca_store, xgb_store):
         with open(ar, 'rb') as handle:
             ar_data = pickle.load(handle)
@@ -300,16 +370,38 @@ def poos_model_evaluation(ar_store, pca_store, xgb_store):
 
         model_data = pd.concat([pca_data['data_df'], xgb_data['data_df']], axis=1)
 
-        d_vectors = (ar_data['data_df']['ar4_ehat'].values ** 2)[..., None] - \
+        d_vectors = (ar_data['data_df']['ar_ehat'].values ** 2)[..., None] - \
                     model_data[[x for x in model_data.columns.values if '_ehat' in x]].values ** 2
 
-        p_values = np.apply_along_axis(lambda x: sm.stats.diagnostic.acorr_ljungbox(x),
-                                       axis=0, arr=d_vectors)[1, int(np.round(np.sqrt(d_vectors.shape[0]))), :]
+
+        p_values = np.apply_along_axis(lambda x: sm.tsa.stattools.kpss(x),
+                                       axis=0, arr=d_vectors)[1, :]
+
+        p_xl_values = np.apply_along_axis(lambda x: xl_test(x),
+                                       axis=0, arr=d_vectors)
 
         results_store[f'h{h}'] = p_values
+        results_xl_store[f'h{h}'] = p_xl_values
+
+        # Plotting
+        plt.close()
+        d_vectors = pd.DataFrame(d_vectors, columns=[x.replace('_ehat', '_d') for x in model_data.columns.values if '_ehat' in x])
+        d_vectors.plot(subplots=True, layout=(3,2))
+        plt.savefig(f'{results_dir}/h{h}_d_plot.png')
 
     results_df = pd.DataFrame.from_dict(results_store, orient='index',
-                                        columns=[x for x in model_data.columns.values if '_ehat' in x])
+                                        columns=[x.replace('_ehat', '_KPSS') for x in model_data.columns.values if '_ehat' in x])
+
+    results_xldf = pd.DataFrame.from_dict(results_xl_store, orient='index',
+                                        columns=[x.replace('_ehat', '_XL')  for x in model_data.columns.values if '_ehat' in x])
+
+    results_df = pd.concat((results_df, results_xldf), axis=1)
+
+    wb = openpyxl.Workbook()
+    ws = wb[wb.sheetnames[-1]]
+    print_df_to_excel(df=results_df, ws=ws)
+    wb.save(f'{results_dir}/test_summary.xlsx')
+
 
 
 class Shap_data:
@@ -330,8 +422,14 @@ class Shap_data:
             shap.summary_plot(self.df, feature_names=self.df.columns.values, plot_type=plot_type)
 
 
-def poos_shap(xgb_store):
-    for xgb_dir in xgb_store:
+def poos_shap(fl_master, fl, xgb_store, results_dir):
+    excel_name = create_excel_file(f'{results_dir}/poos_shap.xlsx')
+    wb = openpyxl.load_workbook(excel_name)
+
+    idx = fl_master.time_stamp.index(first_est_date)
+    ts = fl_master.time_stamp[idx:]
+
+    for xgb_dir,h  in zip(xgb_store, [1,3,6,12,24]):
         with open(xgb_dir, 'rb') as handle:
             xgb_data = pickle.load(handle)
 
@@ -346,7 +444,9 @@ def poos_shap(xgb_store):
                 grouped_shap_abs.append(shap_data.grouped_shap_abs)
 
         shap_abs = pd.concat(shap_abs, axis=1).T
+        shap_abs.index = ts
         gshap_abs = pd.concat(grouped_shap_abs, axis=1).T
+        gshap_abs.index=ts
 
         def get_top_columns_per_row(df, n_top):
             ranked_matrix = np.argsort(-df.values, axis=1)[:, :n_top]
@@ -360,5 +460,20 @@ def poos_shap(xgb_store):
         top_shap_names, top_shap_values = get_top_columns_per_row(df=shap_abs, n_top=10)
         top_gshap_names, top_gshap_values = get_top_columns_per_row(df=gshap_abs, n_top=10)
 
-        gshap_abs_norm = gshap_abs.div(gshap_abs.max(axis=1), axis=0)
-        gshap_abs.plot(y=np.unique(top_gshap_names.values))
+        #gshap_abs_norm = gshap_abs.div(gshap_abs.max(axis=1), axis=0)
+        #gshap_abs.plot(y=np.unique(top_gshap_names.values))
+
+        def print_df(sheet_name, df, h):
+            wb.create_sheet(f'h{h}_{sheet_name}')
+            ws = wb[f'h{h}_{sheet_name}']
+            print_df_to_excel(ws=ws, df=df)
+
+        print_df('shap_names', df=top_shap_names.applymap(str), h=h)
+        print_df('shap_values', df=top_shap_values, h=h)
+        print_df('gshap_names', df=top_gshap_names.applymap(str), h=h)
+        print_df('gshap_values', df=top_gshap_values, h=h)
+
+        wb.save(excel_name)
+
+
+

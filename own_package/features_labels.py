@@ -136,7 +136,7 @@ def hparam_selection(fl, model, type, bounds_m, bounds_p, h, h_idx, h_max, r, re
         if type == 'PLS':
             data_store_save_dir = create_results_directory('{}/{}_h{}'.format(results_dir, model, h))
             for m, p in hparams_store:
-                y_hat, _, rmse, results_t = fl.ar_pls_expanding_window(h=h, p=p, r=r, yo_t=fl.yo_t,
+                y_hat, _, rmse, results_t = fl.ar_pls_expanding_window(h=h, p=p, yo_t=fl.yo_t,
                                                                        y_t=fl.y_t[:, h_idx][..., None],
                                                                        yo_v=fl.yo_v,
                                                                        y_v=fl.y_v[:, h_idx][..., None],
@@ -159,7 +159,7 @@ def hparam_selection(fl, model, type, bounds_m, bounds_p, h, h_idx, h_max, r, re
 
         elif type == 'AIC_BIC':
             for m, p in hparams_store:
-                aic, bic = fl.aic_bic_for_ar(h=h, p=p, r=r, h_max=h_max, p_max=p_max, yo=fl.yo,
+                aic, bic = fl.aic_bic_for_ar(h=h, p=p, h_max=h_max, p_max=p_max, yo=fl.yo,
                                              y=fl.y[:, h_idx][..., None])
                 rmse_store.append(-1)
                 aic_t_store.append(aic)
@@ -667,7 +667,7 @@ class Fl_ar(Fl_master):
             return yo_v[:-(h-1), :], y_v[h-1:]
     '''
 
-    def ar_pls_expanding_window(self, h, p, r, yo_t, y_t, yo_v, y_v, rolling=False,
+    def ar_pls_expanding_window(self, h, p,  yo_t, y_t, yo_v, y_v, rolling=False,
                                 save_dir=None, save_name=None):
         y_hat_store = []
         e_hat_store = []
@@ -730,10 +730,22 @@ class Fl_ar(Fl_master):
 
         return y_hat_store, e_hat_store, math.sqrt(np.mean(np.array(e_hat_store) ** 2)), results_t
 
-    def aic_bic_for_ar(self, h, p, r, h_max, p_max, yo, y):
-        yo_LM, y, _ = self.ar_prepare_data_matrix(yo, y, h, p)
-        T = np.shape(yo)[0]
-        a_max = p_max
+    def ar_hparam_opt(self, yo, y, h, p_max):
+        hparams_store = list(range(1, p_max + 1))
+        aic_store = []
+        for p in hparams_store:
+            aic_store.append(self.aic_bic_for_ar(h=h, p=p, h_max=h, p_max=p_max, yo=yo,y=y)[0])
+
+        df = pd.DataFrame(data=np.concatenate((np.array(hparams_store)[...,None], np.array(aic_store)[...,None]), axis=1),
+                          columns=['p', 'AIC']).sort_values('AIC')
+
+        return df
+
+    def aic_bic_for_ar(self, h, p, h_max, p_max, yo, y):
+        yo_LM, y = self.ar_prepare_data_matrix(yo, y, h, p)
+        T = np.shape(yo_LM)[0]
+        # Make sure that equal number of observations for all the samples
+        a_max = p_max-p
         if h < h_max or p < p_max:
             yo_LM = yo_LM[-T + h_max + a_max - 1:, :]
             y = y[-T + h_max + a_max - 1:, :]

@@ -87,4 +87,4 @@ def selector(case, **kwargs):
 
 
 if __name__ == '__main__':
-    selector(case=1, excel_dir='./excel/dataset2/PAYEMS_data_loader.xlsx', var_name='poos_PAY_xgba')
+    selector(case=1, excel_dir='./excel/dataset2/CMRMTSPLx_data_loader.xlsx', var_name='poos_CMR_xgba')
