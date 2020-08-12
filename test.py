@@ -30,17 +30,17 @@ def selector(case, **kwargs):
         h_idx_store = [0, 1, 2, 3, 4]
         for h, h_idx in zip(h_store, h_idx_store):
             poos_analysis(fl_master=fl_master, h=h, h_idx=h_idx, model_mode='xgb',
-                          results_dir='./results/poos/poos_CMR_xgba',
-                          save_dir=f'./results/poos/poos_CMR_xgba/poos_h{h}.pkl')
+                          results_dir='./results/poos/poos_IND_xgbar',
+                          save_dir=f'./results/poos/poos_IND_xgbar/poos_h{h}.pkl')
     elif case == 3:
-        model_name = 'pca'
-        var_name = 'CMR'
+        model_name = 'xgba'
+        var_name = 'INDr'
         poos_processed_data_analysis(
-            save_dir_store=[f'./results/poos/poos_{var_name}_{model_name}/poos_{model_name}_h1_analysis_results.pkl',
-                            f'./results/poos/poos_{var_name}_{model_name}/poos_{model_name}_h3_analysis_results.pkl',
-                            f'./results/poos/poos_{var_name}_{model_name}/poos_{model_name}_h6_analysis_results.pkl',
-                            f'./results/poos/poos_{var_name}_{model_name}/poos_{model_name}_h12_analysis_results.pkl',
-                            f'./results/poos/poos_{var_name}_{model_name}/poos_{model_name}_h24_analysis_results.pkl',
+            save_dir_store=[f'./results/poos/poos_{var_name}_{model_name}/poos_xgb_h1_analysis_results.pkl',
+                            f'./results/poos/poos_{var_name}_{model_name}/poos_xgb_h3_analysis_results.pkl',
+                            f'./results/poos/poos_{var_name}_{model_name}/poos_xgb_h6_analysis_results.pkl',
+                            f'./results/poos/poos_{var_name}_{model_name}/poos_xgb_h12_analysis_results.pkl',
+                            f'./results/poos/poos_{var_name}_{model_name}/poos_xgb_h24_analysis_results.pkl',
                             ],
             h_store=['1',
                      '3',
@@ -141,13 +141,33 @@ def selector(case, **kwargs):
     elif case == 5:
         # Forecast evaluation DM
         h_store = [1, 3, 6, 12, 24]
-        var_name = 'PAY'
-        results_dir = create_results_directory(f'./results/poos/model_eval_{var_name}')
-        poos_model_evaluation(
-            ar_store=[f'./results/poos/poos_{var_name}_ar/poos_ar_h{h}_analysis_results.pkl' for h in h_store],
-            pca_store=[f'./results/poos/poos_{var_name}_pca/poos_pca_h{h}_analysis_results.pkl' for h in h_store],
-            xgb_store=[f'./results/poos/poos_{var_name}_xgba/poos_xgb_h{h}_analysis_results.pkl' for h in h_store],
-            results_dir=results_dir)
+
+        output = read_excel_dataloader(excel_dir='./excel/dataset2/INDPRO_data_loader.xlsx')
+        fl_master = Fl_master(x=output[0], features_names=output[1],
+                              yo=output[2], labels_names=output[3],
+                              y=output[4], y_names=output[5],
+                              time_stamp=output[6])
+
+        var_store = {'CPIA': ['2008:11'],
+                     'PAY': ['1975:3'],
+                     'CMR': ['1975:1', '1980:6', '2009:2'],
+                     'DPC': ['2020:3'],
+                     'IND': ['1975:1', '1980:6', '2009:2'],
+                     }
+        var_store = {'IND': []}
+
+        for var_name, dates in var_store.items():
+            results_dir = create_results_directory(f'./results/poos/model_eval_{var_name}')
+            poos_model_evaluation(fl_master=fl_master,
+                                  ar_store=[f'./results/poos/poos_{var_name}_ar/poos_ar_h{h}_analysis_results.pkl' for h
+                                            in h_store],
+                                  pca_store=[f'./results/poos/poos_{var_name}_pca/poos_pca_h{h}_analysis_results.pkl'
+                                             for h in h_store],
+                                  xgb_store=[f'./results/poos/poos_{var_name}_xgbar/poos_xgb_h{h}_analysis_results.pkl'
+                                             for h in h_store],
+                                  results_dir=results_dir,
+                                  blocked_dates=dates,
+                                  blocks=True)
     elif case == 6:
         h_store = [1, 3, 6, 12, 24]
         var_name = kwargs['var_name']

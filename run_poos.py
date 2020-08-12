@@ -24,7 +24,7 @@ def selector(case, **kwargs):
 
         est_dates = [f'{x}:12' for x in range(1969, 2020, 5)[:-1]]
 
-        default_hparams = {'seed': 42,
+        default_hparams = {'seed': 17,
                            'booster': 'gbtree',
                            'learning_rate': 0.1,
                            'objective': 'reg:squarederror',
@@ -54,14 +54,17 @@ def selector(case, **kwargs):
                                            'adap_gamma': {'type': 'Real', 'lower': -2, 'upper': 1.5}
                                            },
                              }
-
+        model_mode = 'xgb_with_hparam'
+        hparam_save_dir = './results/poos/poos_IND_xgba'
         poos_experiment(fl_master=fl_master, fl=fl_xgb, est_dates=est_dates, z_type=1, h=1, h_idx=0,
-                        m_max=12, p_max=24, model_mode='xgb', save_dir=results_dir,
-                        default_hparams=default_hparams, hparam_opt_params=hparam_opt_params
+                        m_max=12, p_max=24, model_mode=model_mode, save_dir=results_dir,
+                        default_hparams=default_hparams, hparam_opt_params=hparam_opt_params,
+                        hparam_save_dir=hparam_save_dir
                         )
         poos_experiment(fl_master=fl_master, fl=fl_xgb, est_dates=est_dates, z_type=1, h=3, h_idx=1,
-                        m_max=12, p_max=24, model_mode='xgb', save_dir=results_dir,
-                        default_hparams=default_hparams, hparam_opt_params=hparam_opt_params
+                        m_max=12, p_max=24, model_mode=model_mode, save_dir=results_dir,
+                        default_hparams=default_hparams, hparam_opt_params=hparam_opt_params,
+                        hparam_save_dir=hparam_save_dir
                         )
         #poos_experiment(fl_master=fl_master, fl=fl_xgb, est_dates=est_dates, z_type=1, h=6, h_idx=2,
         #                m_max=12, p_max=24, model_mode='xgb', save_dir=results_dir,
@@ -87,4 +90,4 @@ def selector(case, **kwargs):
 
 
 if __name__ == '__main__':
-    selector(case=1, excel_dir='./excel/dataset2/CMRMTSPLx_data_loader.xlsx', var_name='poos_CMR_xgba')
+    selector(case=1, excel_dir='./excel/dataset2/INDPRO_data_loader.xlsx', var_name='poos_IND_xgba_s17')
