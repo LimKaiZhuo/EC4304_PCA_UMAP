@@ -136,7 +136,7 @@ def hparam_selection(fl, model, type, bounds_m, bounds_p, h, h_idx, h_max, r, re
         if type == 'PLS':
             data_store_save_dir = create_results_directory('{}/{}_h{}'.format(results_dir, model, h))
             for m, p in hparams_store:
-                y_hat, _, rmse, results_t = fl.ar_pls_expanding_window(h=h, p=p, r=r, yo_t=fl.yo_t,
+                y_hat, _, rmse, results_t = fl.ar_pls_expanding_window(h=h, p=p, yo_t=fl.yo_t,
                                                                        y_t=fl.y_t[:, h_idx][..., None],
                                                                        yo_v=fl.yo_v,
                                                                        y_v=fl.y_v[:, h_idx][..., None],
@@ -159,7 +159,7 @@ def hparam_selection(fl, model, type, bounds_m, bounds_p, h, h_idx, h_max, r, re
 
         elif type == 'AIC_BIC':
             for m, p in hparams_store:
-                aic, bic = fl.aic_bic_for_ar(h=h, p=p, r=r, h_max=h_max, p_max=p_max, yo=fl.yo,
+                aic, bic = fl.aic_bic_for_ar(h=h, p=p, h_max=h_max, p_max=p_max, yo=fl.yo,
                                              y=fl.y[:, h_idx][..., None])
                 rmse_store.append(-1)
                 aic_t_store.append(aic)
@@ -667,7 +667,7 @@ class Fl_ar(Fl_master):
             return yo_v[:-(h-1), :], y_v[h-1:]
     '''
 
-    def ar_pls_expanding_window(self, h, p, r, yo_t, y_t, yo_v, y_v, rolling=False,
+    def ar_pls_expanding_window(self, h, p,  yo_t, y_t, yo_v, y_v, rolling=False,
                                 save_dir=None, save_name=None):
         y_hat_store = []
         e_hat_store = []
@@ -730,10 +730,22 @@ class Fl_ar(Fl_master):
 
         return y_hat_store, e_hat_store, math.sqrt(np.mean(np.array(e_hat_store) ** 2)), results_t
 
-    def aic_bic_for_ar(self, h, p, r, h_max, p_max, yo, y):
-        yo_LM, y, _ = self.ar_prepare_data_matrix(yo, y, h, p)
-        T = np.shape(yo)[0]
-        a_max = p_max
+    def ar_hparam_opt(self, yo, y, h, p_max):
+        hparams_store = list(range(1, p_max + 1))
+        aic_store = []
+        for p in hparams_store:
+            aic_store.append(self.aic_bic_for_ar(h=h, p=p, h_max=h, p_max=p_max, yo=yo,y=y)[0])
+
+        df = pd.DataFrame(data=np.concatenate((np.array(hparams_store)[...,None], np.array(aic_store)[...,None]), axis=1),
+                          columns=['p', 'AIC']).sort_values('AIC')
+
+        return df
+
+    def aic_bic_for_ar(self, h, p, h_max, p_max, yo, y):
+        yo_LM, y = self.ar_prepare_data_matrix(yo, y, h, p)
+        T = np.shape(yo_LM)[0]
+        # Make sure that equal number of observations for all the samples
+        a_max = p_max-p
         if h < h_max or p < p_max:
             yo_LM = yo_LM[-T + h_max + a_max - 1:, :]
             y = y[-T + h_max + a_max - 1:, :]
@@ -1096,10 +1108,8 @@ class Fl_xgb(Fl_cw):
 
     def xgb_hparam_opt(self, x, yo, y, h, m_max, p_max, z_type, hparam_opt_params, default_hparams, results_dir,
                        model_name):
+        y_all = y.copy()
         # Space should include 1) max_depth, 2) colsample_bytree
-        if hparam_opt_params['val_mode'] == 'rfcv':
-            z, y = self.prepare_data_matrix(x, yo, y, h, m_max, p_max, z_type)
-
         space = []
         for k, v in hparam_opt_params['variables'].items():
             if v['type'] == 'Real':
@@ -1125,21 +1135,22 @@ class Fl_xgb(Fl_cw):
                 # Merge default hparams with optimizer trial hparams
                 params = {**default_hparams, **params}
                 if hparam_opt_params['val_mode'] == 'rfcv':
+                    z, y = self.prepare_data_matrix(x, yo, y_all, h, params['m'], params['m']*2, z_type)
                     cv_results = xgb.cv(params=params, dtrain=xgb.DMatrix(data=z, label=y),
-                                        nfold=hparam_opt_params['n_blocks'], num_boost_round=1500,
-                                        early_stopping_rounds=50,
-                                        metrics='rmse', as_pandas=True, seed=42)
+                                        nfold=hparam_opt_params['n_blocks'], num_boost_round=params['num_boost_round'],
+                                        early_stopping_rounds=params['early_stopping_rounds'],
+                                        metrics='rmse', as_pandas=True, seed=params['seed'])
                     rounds = cv_results.shape[0]
                     n_rounds_store.append(rounds)
                     score = cv_results['test-rmse-mean'].values[-1]
                     func_vals.append((score, rounds))
                 elif hparam_opt_params['val_mode'] == 'rep_holdout':
-                    score, rounds = self.val_rep_holdout(x, yo, y, h, z_type, n_blocks=hparam_opt_params['n_blocks'],
+                    score, rounds = self.val_rep_holdout(x, yo, y_all, h, z_type, n_blocks=hparam_opt_params['n_blocks'],
                                                          hparams=params)
                     n_rounds_store.append(rounds)
                     func_vals.append((score, rounds))
                 elif hparam_opt_params['val_mode'] == 'prequential':
-                    score, rounds = self.val_prequential(x, yo, y, h, z_type, cut_point=hparam_opt_params['cut_point'],
+                    score, rounds = self.val_prequential(x, yo, y_all, h, z_type, cut_point=hparam_opt_params['cut_point'],
                                                          hparams=params,
                                                          save_dir=results_dir,
                                                          save_name=model_name)
@@ -1149,7 +1160,7 @@ class Fl_xgb(Fl_cw):
                     raise TypeError('hparam opt params val mode is invalid.')
             return score
 
-        res_gp = gp_minimize(objective, space, random_state=42, acq_func='EI',
+        res_gp = gp_minimize(objective, space, random_state=default_hparams['seed'], acq_func='EI',
                              n_calls=hparam_opt_params['n_calls'],
                              n_random_starts=hparam_opt_params['n_random_starts'],
                              )
