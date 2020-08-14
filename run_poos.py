@@ -24,7 +24,7 @@ def selector(case, **kwargs):
 
         est_dates = [f'{x}:12' for x in range(1969, 2020, 5)[:-1]]
 
-        default_hparams = {'seed': 17,
+        default_hparams = {'seed': 42,
                            'booster': 'gbtree',
                            'learning_rate': 0.1,
                            'objective': 'reg:squarederror',
@@ -46,7 +46,7 @@ def selector(case, **kwargs):
 
         hparam_opt_params = {'hparam_mode': 'bo', 'n_calls': 200, 'n_random_starts': 150,
                              'val_mode': 'rep_holdout',
-                             'n_blocks': 3, 'cut_point': 0.95,
+                             'n_blocks': 5, 'cut_point': 0.95,
                              'variables': {'max_depth': {'type': 'Integer', 'lower': 1, 'upper': 6},
                                            'colsample_bytree': {'type': 'Real', 'lower': 0.5, 'upper': 1},
                                            'm': {'type': 'Integer', 'lower': 1, 'upper': 24},
@@ -54,8 +54,8 @@ def selector(case, **kwargs):
                                            'adap_gamma': {'type': 'Real', 'lower': -2, 'upper': 1.5}
                                            },
                              }
-        model_mode = 'xgb_with_hparam'
-        hparam_save_dir = './results/poos/poos_IND_xgba'
+        model_mode = 'xgb'
+        hparam_save_dir = './results/poos/poos_IND_xgbar'
         poos_experiment(fl_master=fl_master, fl=fl_xgb, est_dates=est_dates, z_type=1, h=1, h_idx=0,
                         m_max=12, p_max=24, model_mode=model_mode, save_dir=results_dir,
                         default_hparams=default_hparams, hparam_opt_params=hparam_opt_params,
@@ -67,16 +67,19 @@ def selector(case, **kwargs):
                         hparam_save_dir=hparam_save_dir
                         )
         #poos_experiment(fl_master=fl_master, fl=fl_xgb, est_dates=est_dates, z_type=1, h=6, h_idx=2,
-        #                m_max=12, p_max=24, model_mode='xgb', save_dir=results_dir,
-        #                default_hparams=default_hparams, hparam_opt_params=hparam_opt_params
+        #                m_max=12, p_max=24, model_mode=model_mode, save_dir=results_dir,
+        #                default_hparams=default_hparams, hparam_opt_params=hparam_opt_params,
+        #                hparam_save_dir=hparam_save_dir
         #                )
         #poos_experiment(fl_master=fl_master, fl=fl_xgb, est_dates=est_dates, z_type=1, h=12, h_idx=3,
-        #                m_max=12, p_max=24, model_mode='xgb', save_dir=results_dir,
-        #                default_hparams=default_hparams, hparam_opt_params=hparam_opt_params
+        #                m_max=12, p_max=24, model_mode=model_mode, save_dir=results_dir,
+        #                default_hparams=default_hparams, hparam_opt_params=hparam_opt_params,
+        #                hparam_save_dir=hparam_save_dir
         #                )
         #poos_experiment(fl_master=fl_master, fl=fl_xgb, est_dates=est_dates, z_type=1, h=24, h_idx=4,
-        #                m_max=12, p_max=24, model_mode='xgb', save_dir=results_dir,
-        #                default_hparams=default_hparams, hparam_opt_params=hparam_opt_params
+        #                m_max=12, p_max=24, model_mode=model_mode, save_dir=results_dir,
+        #                default_hparams=default_hparams, hparam_opt_params=hparam_opt_params,
+        #                hparam_save_dir=hparam_save_dir
         #                )
 
     elif case == 2:
@@ -90,4 +93,4 @@ def selector(case, **kwargs):
 
 
 if __name__ == '__main__':
-    selector(case=1, excel_dir='./excel/dataset2/INDPRO_data_loader.xlsx', var_name='poos_IND_xgba_s17')
+    selector(case=1, excel_dir='./excel/dataset_0720/INDPRO_data_loader.xlsx', var_name='poos_IND_xgba_rh_s42')

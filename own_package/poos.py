@@ -114,7 +114,7 @@ def poos_experiment(fl_master, fl, est_dates, z_type, h, h_idx, m_max, p_max,
                                                        y_t=y_est[:, h_idx][..., None],
                                                        yo_v=yo_tt,
                                                        y_v=y_tt[:, h_idx][..., None],
-                                                       rolling=False,
+                                                       rolling=True,
                                                        save_dir=None,
                                                        save_name=None)
             data_store.append({'est_date': est_date,
@@ -130,7 +130,7 @@ def poos_experiment(fl_master, fl, est_dates, z_type, h, h_idx, m_max, p_max,
                                                           yo_t=yo_est,
                                                           y_t=y_est[:, h_idx][..., None],
                                                           yo_v=yo_tt,
-                                                          y_v=y_tt[:, h_idx][..., None], rolling=False,
+                                                          y_v=y_tt[:, h_idx][..., None], rolling=True,
                                                           save_dir=None, save_name=None)
             data_store.append({'est_date': est_date,
                                'next_tune_date': next_tune_date,
@@ -148,7 +148,7 @@ def poos_experiment(fl_master, fl, est_dates, z_type, h, h_idx, m_max, p_max,
                                                           yo_t=yo_est,
                                                           y_t=y_est[:, h_idx][..., None],
                                                           yo_v=yo_tt,
-                                                          y_v=y_tt[:, h_idx][..., None], rolling=False,
+                                                          y_v=y_tt[:, h_idx][..., None], rolling=True,
                                                           save_dir=None, save_name=None)
 
         idx = fl_master.time_stamp.index(first_est_date)
@@ -177,7 +177,7 @@ def poos_experiment(fl_master, fl, est_dates, z_type, h, h_idx, m_max, p_max,
             pickle.dump({'data_df': data_df, 'hparam_df': hparam_df}, file)
 
 
-def poos_analysis(fl_master, h, h_idx, model_mode, results_dir, save_dir):
+def poos_analysis(fl_master, h, h_idx, model_mode, est_mode, results_dir, save_dir):
     def calculate_sequence_ntree(block_ae, hparam_ntree):
         best_idx_store = list(np.argmin(block_ae, axis=1))
         predicted_idx = [hparam_ntree] * 5
@@ -193,6 +193,13 @@ def poos_analysis(fl_master, h, h_idx, model_mode, results_dir, save_dir):
         return np.average([ae[idx] ** 2 for ae, idx in zip(block_ae, sequence_ntree)]) ** 0.5, \
                [ehat[idx] for ehat, idx in zip(block_ehat, sequence_ntree)]
 
+    def calculate_hparam_ntree(hparam_df):
+        if est_mode == 'rep_holdout':
+            div_factor = 0.85
+        elif est_mode == 'rfcv':
+            div_factor = 0.8
+        return min(int(round(hparam_df.iloc[0, hparam_df.columns.tolist().index('m iters')] / 0.85)), 600) - 1
+
     with open(save_dir, 'rb') as handle:
         data_store = pickle.load(handle)
 
@@ -201,9 +208,6 @@ def poos_analysis(fl_master, h, h_idx, model_mode, results_dir, save_dir):
     ts = fl_master.time_stamp[idx:]
 
     if model_mode == 'xgb':
-        index_products = list(itertools.product(fl_master.features_names, list(range(24)))) + [('y', idx) for idx in
-                                                                                               range(48)]
-
         index_products = [('y', str(idx)) for idx in range(3)]
 
         score_df = pd.DataFrame(index=pd.MultiIndex.from_tuples(index_products, names=['Variable', 'Lag'])).T
@@ -212,6 +216,7 @@ def poos_analysis(fl_master, h, h_idx, model_mode, results_dir, save_dir):
         ehat_store = []
         optimal_ntree_store = []
         predicted_ntree_store = []
+        rw_ntree_store = []
         hparam_ntree_store = []
         block_store = []
         for idx, data in enumerate(data_store):
@@ -225,12 +230,11 @@ def poos_analysis(fl_master, h, h_idx, model_mode, results_dir, save_dir):
             block_ehat = [single_step['progress']['h_step_ahead']['ehat'] for single_step in data['poos_data_store']]
             ae_store.extend(block_ae)
             ehat_store.extend(block_ehat)
-            hparam_ntree = min(
-                int(round(data['hparams_df'].iloc[0, data['hparams_df'].columns.tolist().index('m iters')] / 0.85)),
-                600) - 1
+            hparam_ntree = calculate_hparam_ntree(data['hparams_df'])
             optimal_ntree, predicted_ntree = calculate_sequence_ntree(block_ae=block_ae,
                                                                       hparam_ntree=hparam_ntree)
             optimal_ntree_store.extend(optimal_ntree)
+            rw_ntree_store.extend([hparam_ntree]*5+optimal_ntree[4:-1])
             predicted_ntree_store.extend(predicted_ntree)
             hparam_ntree_store.extend([hparam_ntree] * len(optimal_ntree))
 
@@ -248,6 +252,7 @@ def poos_analysis(fl_master, h, h_idx, model_mode, results_dir, save_dir):
         hparam_rmse, hparam_ehat = calculate_horizon_rmse_ae(ae_store, ehat_store, hparam_ntree_store)
         ssm_rmse, ssm_ehat = calculate_horizon_rmse_ae(ae_store, ehat_store, predicted_ntree_store)
         ssm_full_rmse, ssm_full_ehat = calculate_horizon_rmse_ae(ae_store, ehat_store, ssm_full_ntree_store)
+        rw_rmse, rw_ehat = calculate_horizon_rmse_ae(ae_store, ehat_store, rw_ntree_store)
 
         df = pd.DataFrame.from_dict({'time_stamp': ts,
                                      'hparam_block': block_store,
@@ -255,11 +260,13 @@ def poos_analysis(fl_master, h, h_idx, model_mode, results_dir, save_dir):
                                      'oracle_ehat': oracle_ehat,
                                      'ssm_ehat': ssm_ehat,
                                      'ssm_full_ehat': ssm_full_ehat,
+                                     'rw_ehat': rw_ehat,
                                      'hparam_ehat': hparam_ehat,
                                      'max_iter_ehat': max_iter_ehat,
                                      'oracle_ntree': optimal_ntree_store,
                                      'ssm_ntree': predicted_ntree_store,
                                      'ssm_full_ntree': ssm_full_ntree_store,
+                                     'rw_ntree':rw_ntree_store,
                                      'hparam_ntree': hparam_ntree_store}).set_index('time_stamp')
 
         # df.plot(y=['oracle_ehat', 'ssm_ehat', 'ssm_full_ehat', 'hparam_ehat', 'max_iter_ehat'], use_index=True)
@@ -275,6 +282,56 @@ def poos_analysis(fl_master, h, h_idx, model_mode, results_dir, save_dir):
 
         with open(f'{results_dir}/poos_{model_mode}_h{h}_analysis_results.pkl', "wb") as file:
             pickle.dump({'data_df': df, 'rmse_df': rmse_df, 'hparam_df': hparam_df}, file)
+
+
+def poos_analysis_combining_xgb(h, results_dir, poos_post_dir_store):
+    yhat_df_store = []
+    hparam_df_store = []
+    for poos_post_dir in poos_post_dir_store:
+        with open(f'{poos_post_dir}/poos_xgb_h{h}_analysis_results.pkl', 'rb') as handle:
+            data = pickle.load(handle)
+        df = data['data_df']
+        yhat_df = df[[x for x in df.columns if 'y_' in x]].values - df[[x for x in df.columns if '_ehat' in x]]
+        yhat_df_store.append(yhat_df)
+        hparam_df_store.append(data['hparam_df'].reset_index(drop=True))
+
+    y = df[[x for x in df.columns if 'y_' in x]].values
+    data_df = pd.concat(yhat_df_store).groupby(level=0).mean().reindex(df.index)
+    data_df = y - data_df
+    hparam_df = pd.concat(hparam_df_store).groupby(level=0).mean()
+
+    with open(f'{results_dir}/poos_xgb_h{h}_analysis_results.pkl', "wb") as file:
+        pickle.dump({'data_df': data_df, 'hparam_df':hparam_df}, file)
+
+
+def poos_xgb_plotting_m(h, results_dir):
+    with open(f'{results_dir}/poos_xgb_h{h}_analysis_results.pkl', 'rb') as handle:
+        data = pickle.load(handle)
+    df = data['data_df']
+    fig, ax = plt.subplots(figsize=(10, 6))
+    ax.margins(x=0.01, y=0.01)
+    df.plot(kind='line', y=['oracle_ntree', 'ssm_ntree'], ax=ax, marker='o', ms=1.5)
+    ax.set_ylabel('ntrees')
+    fig.tight_layout()
+    fig.savefig(f'{results_dir}/ntrees_vs_time_h{h}.png', transparent=False, dpi=300, bbox_inches="tight")
+
+    with open(f'{results_dir}/poos_h{h}.pkl', 'rb') as handle:
+        data = pickle.load(handle)
+    ehat_store = np.array([step['progress']['h_step_ahead']['rmse'] for block in data for step in block['poos_data_store']])
+    ehat_store = (ehat_store-ehat_store.min(axis=1)[:,None])/(ehat_store.max(axis=1)[:,None]-ehat_store.min(axis=1)[:,None])
+    ehat_df = pd.DataFrame(ehat_store.T, columns=df.index.values)
+    fig, ax = plt.subplots()
+    ax.margins(x=0.01, y=0.01)
+    y_store = ['1970:1', '1983:1', '2007:1', '2020:3']
+    ehat_df.plot(kind='line', y=y_store, ax=ax)
+    ax.set_ylabel('|ehat|')
+    ax.set_xlabel('ntrees')
+    ax.legend(loc='right')
+    for y in y_store:
+        ax.scatter(df.loc[y]['ssm_ntree'], ehat_df[y].iloc[int(df.loc[y]['ssm_ntree'])], marker='x', s=100)
+    fig.tight_layout()
+    fig.savefig(f'{results_dir}/ehat_vs_ntrees_h{h}.png', transparent=False, dpi=300, bbox_inches="tight")
+
 
 
 def poos_processed_data_analysis(results_dir, save_dir_store, h_store, model_mode):

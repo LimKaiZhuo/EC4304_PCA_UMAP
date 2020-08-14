@@ -1108,10 +1108,8 @@ class Fl_xgb(Fl_cw):
 
     def xgb_hparam_opt(self, x, yo, y, h, m_max, p_max, z_type, hparam_opt_params, default_hparams, results_dir,
                        model_name):
+        y_all = y.copy()
         # Space should include 1) max_depth, 2) colsample_bytree
-        if hparam_opt_params['val_mode'] == 'rfcv':
-            z, y = self.prepare_data_matrix(x, yo, y, h, m_max, p_max, z_type)
-
         space = []
         for k, v in hparam_opt_params['variables'].items():
             if v['type'] == 'Real':
@@ -1137,21 +1135,22 @@ class Fl_xgb(Fl_cw):
                 # Merge default hparams with optimizer trial hparams
                 params = {**default_hparams, **params}
                 if hparam_opt_params['val_mode'] == 'rfcv':
+                    z, y = self.prepare_data_matrix(x, yo, y_all, h, params['m'], params['m']*2, z_type)
                     cv_results = xgb.cv(params=params, dtrain=xgb.DMatrix(data=z, label=y),
-                                        nfold=hparam_opt_params['n_blocks'], num_boost_round=1500,
-                                        early_stopping_rounds=50,
-                                        metrics='rmse', as_pandas=True, seed=42)
+                                        nfold=hparam_opt_params['n_blocks'], num_boost_round=params['num_boost_round'],
+                                        early_stopping_rounds=params['early_stopping_rounds'],
+                                        metrics='rmse', as_pandas=True, seed=params['seed'])
                     rounds = cv_results.shape[0]
                     n_rounds_store.append(rounds)
                     score = cv_results['test-rmse-mean'].values[-1]
                     func_vals.append((score, rounds))
                 elif hparam_opt_params['val_mode'] == 'rep_holdout':
-                    score, rounds = self.val_rep_holdout(x, yo, y, h, z_type, n_blocks=hparam_opt_params['n_blocks'],
+                    score, rounds = self.val_rep_holdout(x, yo, y_all, h, z_type, n_blocks=hparam_opt_params['n_blocks'],
                                                          hparams=params)
                     n_rounds_store.append(rounds)
                     func_vals.append((score, rounds))
                 elif hparam_opt_params['val_mode'] == 'prequential':
-                    score, rounds = self.val_prequential(x, yo, y, h, z_type, cut_point=hparam_opt_params['cut_point'],
+                    score, rounds = self.val_prequential(x, yo, y_all, h, z_type, cut_point=hparam_opt_params['cut_point'],
                                                          hparams=params,
                                                          save_dir=results_dir,
                                                          save_name=model_name)
@@ -1161,7 +1160,7 @@ class Fl_xgb(Fl_cw):
                     raise TypeError('hparam opt params val mode is invalid.')
             return score
 
-        res_gp = gp_minimize(objective, space, random_state=42, acq_func='EI',
+        res_gp = gp_minimize(objective, space, random_state=default_hparams['seed'], acq_func='EI',
                              n_calls=hparam_opt_params['n_calls'],
                              n_random_starts=hparam_opt_params['n_random_starts'],
                              )

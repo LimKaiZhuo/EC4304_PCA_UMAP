@@ -1,6 +1,6 @@
 from own_package.boosting import run_testing
 from own_package.poos import poos_analysis, poos_processed_data_analysis, poos_experiment, poos_model_evaluation, \
-    poos_shap
+    poos_shap, poos_analysis_combining_xgb, poos_xgb_plotting_m
 from own_package.features_labels import read_excel_dataloader, Fl_master, Fl_ar, Fl_pca, Fl_xgb
 from own_package.others import create_results_directory
 
@@ -29,18 +29,19 @@ def selector(case, **kwargs):
         h_store = [1, 3, 6, 12, 24]
         h_idx_store = [0, 1, 2, 3, 4]
         for h, h_idx in zip(h_store, h_idx_store):
-            poos_analysis(fl_master=fl_master, h=h, h_idx=h_idx, model_mode='xgb',
-                          results_dir='./results/poos/poos_IND_xgbar',
-                          save_dir=f'./results/poos/poos_IND_xgbar/poos_h{h}.pkl')
+            poos_analysis(fl_master=fl_master, h=h, h_idx=h_idx, model_mode='xgb', est_mode='rfcv',
+                          results_dir='./results/poos_rolling/poos_IND_xgbar',
+                          save_dir=f'./results/poos_rolling/poos_IND_xgbar/poos_h{h}.pkl')
     elif case == 3:
-        model_name = 'xgba'
-        var_name = 'INDr'
+        model_name = 'xgbar'
+        var_name = 'IND'
+        poos_type = 'poos_rolling'
         poos_processed_data_analysis(
-            save_dir_store=[f'./results/poos/poos_{var_name}_{model_name}/poos_xgb_h1_analysis_results.pkl',
-                            f'./results/poos/poos_{var_name}_{model_name}/poos_xgb_h3_analysis_results.pkl',
-                            f'./results/poos/poos_{var_name}_{model_name}/poos_xgb_h6_analysis_results.pkl',
-                            f'./results/poos/poos_{var_name}_{model_name}/poos_xgb_h12_analysis_results.pkl',
-                            f'./results/poos/poos_{var_name}_{model_name}/poos_xgb_h24_analysis_results.pkl',
+            save_dir_store=[f'./results/{poos_type}/poos_{var_name}_{model_name}/poos_xgb_h1_analysis_results.pkl',
+                            f'./results/{poos_type}/poos_{var_name}_{model_name}/poos_xgb_h3_analysis_results.pkl',
+                            f'./results/{poos_type}/poos_{var_name}_{model_name}/poos_xgb_h6_analysis_results.pkl',
+                            f'./results/{poos_type}/poos_{var_name}_{model_name}/poos_xgb_h12_analysis_results.pkl',
+                            f'./results/{poos_type}/poos_{var_name}_{model_name}/poos_xgb_h24_analysis_results.pkl',
                             ],
             h_store=['1',
                      '3',
@@ -48,8 +49,26 @@ def selector(case, **kwargs):
                      '12',
                      '24',
                      ],
-            results_dir=f'./results/poos/poos_{var_name}_{model_name}',
+            results_dir=f'./results/{poos_type}/poos_{var_name}_{model_name}',
             model_mode=model_name)
+    elif case == 3.1:
+        # Combine multiple different xgb runs by averaging them. Uses the post processed of poos_h{}.pkl.
+        h_store = [1, 3, 6, 12, 24]
+        h_idx_store = [0, 1, 2, 3, 4]
+        poos_post_dir_store = ['./results/poos_rolling/poos_IND_xgbar',
+                               './results/poos_rolling/poos_IND_xgba_rs17']
+        results_dir = create_results_directory('./results/poos/poos_IND_xgba_rcombined')
+        with open(f'{results_dir}/dir_stores.txt', "w") as text_file:
+            text_file.write(str(poos_post_dir_store))
+        for h, h_idx in zip(h_store, h_idx_store):
+            poos_analysis_combining_xgb(h=h, results_dir=results_dir, poos_post_dir_store=poos_post_dir_store)
+    elif case == 3.2:
+        # Plot information about m iteration errors for xgb. Uses the post processed of poos_h{}.pkl.
+        h_store = [1, 3, 6, 12, 24]
+        h_idx_store = [0, 1, 2, 3, 4]
+        results_dir = './results/poos_rolling/poos_IND_xgba_rfcv_rs42'
+        for h, h_idx in zip(h_store, h_idx_store):
+            poos_xgb_plotting_m(h=h, results_dir=results_dir)
     elif case == 4:
         # Run poos experiment for ar4 or pca
         var_name = kwargs['var_name']
@@ -188,4 +207,5 @@ def selector(case, **kwargs):
 
 
 if __name__ == '__main__':
-    selector(case=5, excel_dir='./excel/dataset2/INDPRO_data_loader.xlsx', var_name='poos_IND_ar')
+    selector(case=2, excel_dir='./excel/dataset2/INDPRO_data_loader.xlsx', var_name='poos_IND_ar')
+    selector(case=3, excel_dir='./excel/dataset2/INDPRO_data_loader.xlsx', var_name='poos_IND_ar')
