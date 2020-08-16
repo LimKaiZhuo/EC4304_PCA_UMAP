@@ -17,9 +17,8 @@ def forecast_error(y_predicted, y_true):
     return 'ehat', np.sum(y_true.get_label() - y_predicted)
 
 
-def poos_experiment(fl_master, fl, est_dates, z_type, h, h_idx, m_max, p_max,
-                    model_mode,
-                    save_dir,
+def poos_experiment(fl_master, fl, est_dates, z_type, h, h_idx, m_max, p_max, first_est_date,
+                    model_mode, save_dir,
                     **kwargs):
     est_dates = est_dates + [fl_master.time_stamp[-1]]
 
@@ -177,7 +176,7 @@ def poos_experiment(fl_master, fl, est_dates, z_type, h, h_idx, m_max, p_max,
             pickle.dump({'data_df': data_df, 'hparam_df': hparam_df}, file)
 
 
-def poos_analysis(fl_master, h, h_idx, model_mode, est_mode, results_dir, save_dir):
+def poos_analysis(fl_master, h, h_idx, model_mode, est_mode, results_dir, save_dir, first_est_date):
     def calculate_sequence_ntree(block_ae, hparam_ntree):
         best_idx_store = list(np.argmin(block_ae, axis=1))
         predicted_idx = [hparam_ntree] * 5
@@ -198,7 +197,7 @@ def poos_analysis(fl_master, h, h_idx, model_mode, est_mode, results_dir, save_d
             div_factor = 0.85
         elif est_mode == 'rfcv':
             div_factor = 0.8
-        return min(int(round(hparam_df.iloc[0, hparam_df.columns.tolist().index('m iters')] / 0.85)), 600) - 1
+        return min(int(round(hparam_df.iloc[0, hparam_df.columns.tolist().index('m iters')] / div_factor)), 600) - 1
 
     with open(save_dir, 'rb') as handle:
         data_store = pickle.load(handle)
@@ -334,8 +333,22 @@ def poos_xgb_plotting_m(h, results_dir):
 
 
 
-def poos_processed_data_analysis(results_dir, save_dir_store, h_store, model_mode):
+def poos_processed_data_analysis(results_dir, save_dir_store, h_store, model_mode, nber_excel_dir):
     first_est_date = '1970:1'
+    # Load NBER dates
+    nber = pd.read_excel(nber_excel_dir, sheet_name='main')
+    peaks = pd.DatetimeIndex(pd.to_datetime(nber['Peak month']))[1:]  # First month is NaN
+    troughs = pd.DatetimeIndex(pd.to_datetime(nber['Trough month']))[1:]
+    dates = pd.date_range('1970-01-01', '2020-12-01', freq='MS')
+    nber_df = pd.DataFrame(data=[-1]*len(dates), index=dates, columns=['business_cycle'])
+    for idx,(d1, d2) in enumerate(zip(peaks, troughs)):
+        # recession ==> 0
+        nber_df.loc[d1:d2-pd.offsets.DateOffset(1, 'months')] = 0
+    for idx,(d1,d2) in enumerate(zip(troughs[:-1], peaks[1:])):
+        # expansionary ==> 1
+        nber_df.loc[d1:d2-pd.offsets.DateOffset(1, 'months')] = 1
+    nber_df.index = [f'{int(year)}:{int(month)}' for year, month in zip(nber_df.index.year.values, nber_df.index.month.values)]
+
     est_dates = [f'{x}:12' for x in range(1969, 2020, 5)[1:-1]]
     df_store = []
     for save_dir in save_dir_store:
@@ -352,20 +365,26 @@ def poos_processed_data_analysis(results_dir, save_dir_store, h_store, model_mod
         for start, end in zip(est_dates_idx[:-1], est_dates_idx[1:]):
             rmse_store.append((ehat_df.iloc[start:end, :] ** 2).mean(axis=0) ** 0.5)
 
-        start_store = ['1970:1', '1970:1', '1983:1', '2007:1', '2019:12']  # Inclusive
-        end_store = ['2020:6', '1983:1', '2007:1', '2020:6', '2020:6']  # Exclusive of those dates
+        start_store = ['1970:1','1970:1', '1970:1', '1983:1', '2007:1', '2019:12']  # Inclusive
+        end_store = ['2020:1','2020:12', '1983:1', '2007:1', '2020:1', '2020:12']  # Exclusive of those dates
 
         for start, end in zip(start_store, end_store):
             start = time_stamps.index(start)
             try:
                 end = time_stamps.index(end)
+                rmse_store.append((ehat_df.iloc[start:end, :] ** 2).mean(axis=0) ** 0.5)
             except ValueError:
-                end = -1  # Means is longer than last date ==> take last entry
-            rmse_store.append((ehat_df.iloc[start:end, :] ** 2).mean(axis=0) ** 0.5)
+                # Means end is the last date
+                rmse_store.append((ehat_df.iloc[start:, :] ** 2).mean(axis=0) ** 0.5)
 
+        # NBER Expansionary and Recessionary
+        rmse_store.append((ehat_df.loc[nber_df['business_cycle']==1, :] ** 2).mean(axis=0) ** 0.5)
+        rmse_store.append((ehat_df.loc[nber_df['business_cycle'] == 0, :] ** 2).mean(axis=0) ** 0.5)
+
+        # Combining data into dataframe
         df = pd.concat((pd.concat(rmse_store, axis=1).T, data_store['hparam_df'].reset_index()), axis=1)
-        df['start_dates'] = [first_est_date] + est_dates + start_store
-        df['end_dates'] = est_dates + [time_stamps[-1]] + end_store
+        df['start_dates'] = [first_est_date] + est_dates + start_store + ['Expansionary', 'Recessionary']
+        df['end_dates'] = est_dates + [time_stamps[-1]] + end_store + ['', '']
         df_store.append(df)
 
     excel_name = create_excel_file(f'{results_dir}/poos_analysis_{model_mode}.xlsx')
@@ -378,7 +397,8 @@ def poos_processed_data_analysis(results_dir, save_dir_store, h_store, model_mod
     wb.save(excel_name)
 
 
-def poos_model_evaluation(fl_master, ar_store, pca_store, xgb_store, results_dir, blocked_dates, blocks):
+def poos_model_evaluation(fl_master, ar_store, pca_store, xgb_store, results_dir, blocked_dates, blocks,
+                          first_est_date):
     def xl_test(x):
         n = x.shape[0]
         u = x - x.mean()
@@ -528,9 +548,9 @@ def poos_model_evaluation(fl_master, ar_store, pca_store, xgb_store, results_dir
             for start, end in zip(est_dates_idx[:-1], est_dates_idx[1:]):
                 p_values = np.apply_along_axis(lambda x: sm.tsa.stattools.kpss(x),
                                                axis=0, arr=d_vectors[start:end])[1, :]
-                p_xl_values = np.apply_along_axis(lambda x: xl_test(x),
-                                                  axis=0, arr=d_vectors[start:end])
-                results_store[f'h{h}_{ts[start]}~{ts[end]}'] = np.concatenate((p_values, p_xl_values))
+                #p_xl_values = np.apply_along_axis(lambda x: xl_test(x),
+                #                                  axis=0, arr=d_vectors[start:end])
+                results_store[f'h{h}_{ts[start]}~{ts[end]}'] = np.concatenate((p_values, p_values))
 
                 series = compute_mcs(e2_df=losses_data.iloc[start:end].copy(), drop_cols=None)
                 series_no_oracle = compute_mcs(e2_df=losses_data.iloc[start:end].copy(), drop_cols=['oracle_ehat^2'])
@@ -664,7 +684,7 @@ class Shap_data:
             shap.summary_plot(self.df, feature_names=self.df.columns.values, plot_type=plot_type)
 
 
-def poos_shap(fl_master, fl, xgb_store, results_dir):
+def poos_shap(fl_master, fl, xgb_store, first_est_date, results_dir):
     excel_name = create_excel_file(f'{results_dir}/poos_shap.xlsx')
     wb = openpyxl.load_workbook(excel_name)
 

@@ -1,10 +1,8 @@
-from own_package.poos import poos_experiment, poos_analysis
+from own_package.poos import poos_analysis, poos_processed_data_analysis, poos_experiment, poos_model_evaluation, \
+    poos_shap, poos_analysis_combining_xgb, poos_xgb_plotting_m
 from own_package.others import create_results_directory
 from own_package.features_labels import read_excel_data, read_excel_dataloader, Fl_master, Fl_pca, Fl_ar, \
     Fl_cw, Fl_xgb, hparam_selection
-
-
-
 
 def selector(case, **kwargs):
     if case == 1:
@@ -21,8 +19,8 @@ def selector(case, **kwargs):
                         time_stamp=None, time_idx=None,
                         features_names=fl_master.features_names, labels_names=fl_master.labels_names,
                         y_names=fl_master.y_names)
-        first_est_date = '1970:1'
-        est_dates = [f'{x}:12' for x in range(1969, 2020, 5)[:-1]]
+        first_est_date = '2005:1'
+        est_dates = ['2004:12']
 
         default_hparams = {'seed': 42,
                            'booster': 'gbtree',
@@ -32,8 +30,8 @@ def selector(case, **kwargs):
                            'subsample': 1,
                            'num_boost_round': 600,
                            'early_stopping_rounds': 100,
-                           'ehat_eval':None,
-                           #'eval_metric':['rmse'],
+                           'ehat_eval': None,
+                           # 'eval_metric':['rmse'],
                            # DART params
                            'rate_drop': 0.2,
                            'skip_drop': 0.5,
@@ -62,35 +60,25 @@ def selector(case, **kwargs):
                         hparam_save_dir=hparam_save_dir
                         )
         poos_experiment(fl_master=fl_master, fl=fl_xgb, est_dates=est_dates, z_type=1, h=3, h_idx=1,
-                        m_max=12, p_max=24, model_mode=model_mode, save_dir=results_dir,first_est_date=first_est_date,
+                        m_max=12, p_max=24, model_mode=model_mode, save_dir=results_dir, first_est_date=first_est_date,
                         default_hparams=default_hparams, hparam_opt_params=hparam_opt_params,
                         hparam_save_dir=hparam_save_dir
                         )
-        #poos_experiment(fl_master=fl_master, fl=fl_xgb, est_dates=est_dates, z_type=1, h=6, h_idx=2,
+        # poos_experiment(fl_master=fl_master, fl=fl_xgb, est_dates=est_dates, z_type=1, h=6, h_idx=2,
         #                m_max=12, p_max=24, model_mode=model_mode, save_dir=results_dir,first_est_date=first_est_date,
         #                default_hparams=default_hparams, hparam_opt_params=hparam_opt_params,
         #                hparam_save_dir=hparam_save_dir
         #                )
-        #poos_experiment(fl_master=fl_master, fl=fl_xgb, est_dates=est_dates, z_type=1, h=12, h_idx=3,
+        # poos_experiment(fl_master=fl_master, fl=fl_xgb, est_dates=est_dates, z_type=1, h=12, h_idx=3,
         #                m_max=12, p_max=24, model_mode=model_mode, save_dir=results_dir,first_est_date=first_est_date,
         #                default_hparams=default_hparams, hparam_opt_params=hparam_opt_params,
         #                hparam_save_dir=hparam_save_dir
         #                )
-        #poos_experiment(fl_master=fl_master, fl=fl_xgb, est_dates=est_dates, z_type=1, h=24, h_idx=4,
+        # poos_experiment(fl_master=fl_master, fl=fl_xgb, est_dates=est_dates, z_type=1, h=24, h_idx=4,
         #                m_max=12, p_max=24, model_mode=model_mode, save_dir=results_dir,first_est_date=first_est_date,
         #                default_hparams=default_hparams, hparam_opt_params=hparam_opt_params,
         #                hparam_save_dir=hparam_save_dir
         #                )
-
-    elif case == 2:
-        excel_dir = kwargs['excel_dir']
-        output = read_excel_dataloader(excel_dir=excel_dir)
-        fl_master = Fl_master(x=output[0], features_names=output[1],
-                              yo=output[2], labels_names=output[3],
-                              y=output[4], y_names=output[5],
-                              time_stamp=output[6])
-        poos_analysis(fl_master=fl_master,model_mode='xgb',save_dir='./results/poos/poos_IND_15/poos_h1.pkl')
-
 
 if __name__ == '__main__':
-    selector(case=1, excel_dir='./excel/dataset_0720/W875RX1_data_loader.xlsx', var_name='poos_W875_xgba_rh_s42')
+    selector(case=1, excel_dir='./excel/dataset_0720/INDPRO_data_loader.xlsx', var_name='poos_INDPRO_xgba_rh_s42')
