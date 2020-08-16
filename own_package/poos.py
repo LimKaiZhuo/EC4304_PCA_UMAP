@@ -100,7 +100,47 @@ def poos_experiment(fl_master, fl, est_dates, z_type, h, h_idx, m_max, p_max, fi
                               )
             with open('{}/poos_h{}.pkl'.format(save_dir, h), "wb") as file:
                 pickle.dump(data_store, file)
+        elif model_mode == 'rf':
+            hparams_df = fl.xgb_hparam_opt(x=x_est, yo=yo_est, y=y_est[:, [h_idx]], h=h,
+                                           m_max=m_max, p_max=p_max,
+                                           z_type=z_type,
+                                           hparam_opt_params=kwargs['hparam_opt_params'],
+                                           default_hparams=kwargs['default_hparams'],
+                                           results_dir=None,
+                                           model_name=None)
 
+            # wb = openpyxl.Workbook()
+            # ws = wb[wb.sheetnames[-1]]
+            # print_df_to_excel(df=hparams_df, ws=ws)
+            # wb.save('./results/poos/hparams.xlsx')
+            # print('done')
+
+            hparams = {**kwargs['default_hparams'], **hparams_df.iloc[0, :].to_dict()}
+            hparams['early_stopping_rounds'] = None
+            hparams['m'] = int(hparams['m'])
+            hparams['max_depth'] = int(hparams['max_depth'])
+            hparams['num_parallel_tree'] = int(hparams['num_parallel_tree'])
+            hparams['ehat_eval'] = forecast_error
+            _, _, _, poos_data_store = fl.pls_expanding_window(h=h, p=hparams['m'] * 2, m=hparams['m'], r=8,
+                                                               cw_model_class=Xgboost,
+                                                               cw_hparams=hparams,
+                                                               x_t=x_est,
+                                                               x_v=x_tt,
+                                                               yo_t=yo_est,
+                                                               y_t=y_est[:, h_idx][..., None],
+                                                               yo_v=yo_tt,
+                                                               y_v=y_tt[:, h_idx][..., None],
+                                                               rolling=True,
+                                                               z_type=z_type,
+                                                               save_dir=None,
+                                                               save_name=None)
+            data_store.append({'est_date': est_date,
+                               'next_tune_date': next_tune_date,
+                               'hparams_df': hparams_df,
+                               'poos_data_store': poos_data_store},
+                              )
+            with open('{}/poos_h{}.pkl'.format(save_dir, h), "wb") as file:
+                pickle.dump(data_store, file)
         elif model_mode == 'pca':
             hparams_df = fl.pca_hparam_opt(x=x_est, yo=yo_est, y=y_est[:, [h_idx]], h=h,
                                            m_max=m_max, p_max=p_max, r=8)
@@ -333,23 +373,28 @@ def poos_xgb_plotting_m(h, results_dir):
 
 
 
-def poos_processed_data_analysis(results_dir, save_dir_store, h_store, model_mode, nber_excel_dir):
-    first_est_date = '1970:1'
-    # Load NBER dates
-    nber = pd.read_excel(nber_excel_dir, sheet_name='main')
-    peaks = pd.DatetimeIndex(pd.to_datetime(nber['Peak month']))[1:]  # First month is NaN
-    troughs = pd.DatetimeIndex(pd.to_datetime(nber['Trough month']))[1:]
-    dates = pd.date_range('1970-01-01', '2020-12-01', freq='MS')
-    nber_df = pd.DataFrame(data=[-1]*len(dates), index=dates, columns=['business_cycle'])
-    for idx,(d1, d2) in enumerate(zip(peaks, troughs)):
-        # recession ==> 0
-        nber_df.loc[d1:d2-pd.offsets.DateOffset(1, 'months')] = 0
-    for idx,(d1,d2) in enumerate(zip(troughs[:-1], peaks[1:])):
-        # expansionary ==> 1
-        nber_df.loc[d1:d2-pd.offsets.DateOffset(1, 'months')] = 1
-    nber_df.index = [f'{int(year)}:{int(month)}' for year, month in zip(nber_df.index.year.values, nber_df.index.month.values)]
+def poos_processed_data_analysis(results_dir, save_dir_store, h_store, model_mode, nber_excel_dir, first_est_date, est_dates):
+    if first_est_date == '2005:1':
+        # Means it is expt 1. Skip NBER and structural RMSE windows
+        skip=True
+    else:
+        skip=False
+        # Load NBER dates
+        nber = pd.read_excel(nber_excel_dir, sheet_name='main')
+        peaks = pd.DatetimeIndex(pd.to_datetime(nber['Peak month']))[1:]  # First month is NaN
+        troughs = pd.DatetimeIndex(pd.to_datetime(nber['Trough month']))[1:]
+        dates = pd.date_range('1970-01-01', '2020-12-01', freq='MS')
+        nber_df = pd.DataFrame(data=[-1] * len(dates), index=dates, columns=['business_cycle'])
+        for idx, (d1, d2) in enumerate(zip(peaks, troughs)):
+            # recession ==> 0
+            nber_df.loc[d1:d2 - pd.offsets.DateOffset(1, 'months')] = 0
+        for idx, (d1, d2) in enumerate(zip(troughs[:-1], peaks[1:])):
+            # expansionary ==> 1
+            nber_df.loc[d1:d2 - pd.offsets.DateOffset(1, 'months')] = 1
+        nber_df.index = [f'{int(year)}:{int(month)}' for year, month in
+                         zip(nber_df.index.year.values, nber_df.index.month.values)]
 
-    est_dates = [f'{x}:12' for x in range(1969, 2020, 5)[1:-1]]
+    est_dates = est_dates[1:]
     df_store = []
     for save_dir in save_dir_store:
         with open(save_dir, 'rb') as handle:
@@ -365,26 +410,43 @@ def poos_processed_data_analysis(results_dir, save_dir_store, h_store, model_mod
         for start, end in zip(est_dates_idx[:-1], est_dates_idx[1:]):
             rmse_store.append((ehat_df.iloc[start:end, :] ** 2).mean(axis=0) ** 0.5)
 
-        start_store = ['1970:1','1970:1', '1970:1', '1983:1', '2007:1', '2019:12']  # Inclusive
-        end_store = ['2020:1','2020:12', '1983:1', '2007:1', '2020:1', '2020:12']  # Exclusive of those dates
+        if not skip:
+            start_store = ['1970:1','1970:1', '1970:1', '1983:1', '2007:1', '2019:12']  # Inclusive
+            end_store = ['2020:1','2020:12', '1983:1', '2007:1', '2020:1', '2020:12']  # Exclusive of those dates
 
-        for start, end in zip(start_store, end_store):
-            start = time_stamps.index(start)
-            try:
-                end = time_stamps.index(end)
-                rmse_store.append((ehat_df.iloc[start:end, :] ** 2).mean(axis=0) ** 0.5)
-            except ValueError:
-                # Means end is the last date
-                rmse_store.append((ehat_df.iloc[start:, :] ** 2).mean(axis=0) ** 0.5)
+            for start, end in zip(start_store, end_store):
+                start = time_stamps.index(start)
+                try:
+                    end = time_stamps.index(end)
+                    rmse_store.append((ehat_df.iloc[start:end, :] ** 2).mean(axis=0) ** 0.5)
+                except ValueError:
+                    # Means end is the last date
+                    rmse_store.append((ehat_df.iloc[start:, :] ** 2).mean(axis=0) ** 0.5)
 
-        # NBER Expansionary and Recessionary
-        rmse_store.append((ehat_df.loc[nber_df['business_cycle']==1, :] ** 2).mean(axis=0) ** 0.5)
-        rmse_store.append((ehat_df.loc[nber_df['business_cycle'] == 0, :] ** 2).mean(axis=0) ** 0.5)
+            # NBER Expansionary and Recessionary
+            rmse_store.append((ehat_df.loc[nber_df['business_cycle']==1, :] ** 2).mean(axis=0) ** 0.5)
+            rmse_store.append((ehat_df.loc[nber_df['business_cycle'] == 0, :] ** 2).mean(axis=0) ** 0.5)
+        else:
+            start_store = ['2005:1', '2020:1']  # Inclusive
+            end_store = ['2020:1', '2020:12']  # Exclusive of those dates
+
+            for start, end in zip(start_store, end_store):
+                start = time_stamps.index(start)
+                try:
+                    end = time_stamps.index(end)
+                    rmse_store.append((ehat_df.iloc[start:end, :] ** 2).mean(axis=0) ** 0.5)
+                except ValueError:
+                    # Means end is the last date
+                    rmse_store.append((ehat_df.iloc[start:, :] ** 2).mean(axis=0) ** 0.5)
 
         # Combining data into dataframe
         df = pd.concat((pd.concat(rmse_store, axis=1).T, data_store['hparam_df'].reset_index()), axis=1)
-        df['start_dates'] = [first_est_date] + est_dates + start_store + ['Expansionary', 'Recessionary']
-        df['end_dates'] = est_dates + [time_stamps[-1]] + end_store + ['', '']
+        if not skip:
+            df['start_dates'] = [f'{x}:1' for x in range(1970, 2020, 5)] + start_store + ['Expansionary', 'Recessionary']
+            df['end_dates'] = [f'{x}:1' for x in range(1970, 2020, 5)[1:]] + [time_stamps[-1]] + end_store + ['', '']
+        else:
+            df['start_dates'] = [first_est_date] + est_dates + start_store
+            df['end_dates'] = est_dates + [time_stamps[-1]] + end_store
         df_store.append(df)
 
     excel_name = create_excel_file(f'{results_dir}/poos_analysis_{model_mode}.xlsx')

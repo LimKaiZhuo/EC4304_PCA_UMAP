@@ -31,12 +31,14 @@ def selector(case, **kwargs):
         h_idx_store = [0, 1, 2, 3, 4]
         for h, h_idx in zip(h_store, h_idx_store):
             poos_analysis(fl_master=fl_master, h=h, h_idx=h_idx, model_mode='xgb', est_mode='rfcv',
-                          results_dir='./results/poos/poos_IND_xgba_rh_s42', first_est_date=first_est_date,
-                          save_dir=f'./results/poos//poos_IND_xgba_rh_s42/poos_h{h}.pkl')
+                          results_dir='./results/poos/poos_IND_rf_rh_s42', first_est_date=first_est_date,
+                          save_dir=f'./results/poos//poos_IND_rf_rh_s42/poos_h{h}.pkl')
     elif case == 3:
         model_name = 'xgba_rh_s42'
         var_name = 'IND'
         poos_type = 'poos'
+        first_est_date = '1970:1'
+        est_dates = [f'{x}:12' for x in range(1969, 2020, 5)[:-1]]
         poos_processed_data_analysis(
             save_dir_store=[f'./results/{poos_type}/poos_{var_name}_{model_name}/poos_xgb_h1_analysis_results.pkl',
                             f'./results/{poos_type}/poos_{var_name}_{model_name}/poos_xgb_h3_analysis_results.pkl',
@@ -50,9 +52,9 @@ def selector(case, **kwargs):
                      '12',
                      '24',
                      ],
-            results_dir=f'./results/{poos_type}/poos_{var_name}_{model_name}',
-            model_mode=model_name,
-            nber_excel_dir='./excel/NBER_062020.xlsx')
+            results_dir=f'./results/{poos_type}/poos_{var_name}_{model_name}', model_mode=model_name,
+            nber_excel_dir='./excel/NBER_062020.xlsx',
+            est_dates=est_dates, first_est_date=first_est_date)
     elif case == 3.1:
         # Combine multiple different xgb runs by averaging them. Uses the post processed of poos_h{}.pkl.
         h_store = [1, 3, 6, 12, 24]
@@ -91,19 +93,19 @@ def selector(case, **kwargs):
 
         model_mode = 'ar'
         poos_experiment(fl_master=fl_master, fl=fl, est_dates=est_dates, z_type=1, h=1, h_idx=0,
-                        m_max=3, p_max=12, model_mode=model_mode, save_dir=results_dir,first_est_date=first_est_date,
+                        m_max=3, p_max=12, model_mode=model_mode, save_dir=results_dir, first_est_date=first_est_date,
                         )
         poos_experiment(fl_master=fl_master, fl=fl, est_dates=est_dates, z_type=1, h=3, h_idx=1,
-                        m_max=3, p_max=12, model_mode=model_mode, save_dir=results_dir,first_est_date=first_est_date,
+                        m_max=3, p_max=12, model_mode=model_mode, save_dir=results_dir, first_est_date=first_est_date,
                         )
         poos_experiment(fl_master=fl_master, fl=fl, est_dates=est_dates, z_type=1, h=6, h_idx=2,
-                        m_max=3, p_max=12, model_mode=model_mode, save_dir=results_dir,first_est_date=first_est_date,
+                        m_max=3, p_max=12, model_mode=model_mode, save_dir=results_dir, first_est_date=first_est_date,
                         )
         poos_experiment(fl_master=fl_master, fl=fl, est_dates=est_dates, z_type=1, h=12, h_idx=3,
-                        m_max=3, p_max=12, model_mode=model_mode, save_dir=results_dir,first_est_date=first_est_date,
+                        m_max=3, p_max=12, model_mode=model_mode, save_dir=results_dir, first_est_date=first_est_date,
                         )
         poos_experiment(fl_master=fl_master, fl=fl, est_dates=est_dates, z_type=1, h=24, h_idx=4,
-                        m_max=3, p_max=12, model_mode=model_mode, save_dir=results_dir,first_est_date=first_est_date,
+                        m_max=3, p_max=12, model_mode=model_mode, save_dir=results_dir, first_est_date=first_est_date,
                         )
 
         poos_processed_data_analysis(
@@ -119,9 +121,8 @@ def selector(case, **kwargs):
                      '12',
                      '24',
                      ],
-            results_dir=results_dir,
-            model_mode=model_mode,
-            nber_excel_dir='./excel/NBER_062020.xlsx')
+            results_dir=results_dir, model_mode=model_mode, nber_excel_dir='./excel/NBER_062020.xlsx',
+            est_dates=est_dates, first_est_date=first_est_date)
 
         model_mode = 'pca'
         results_dir = create_results_directory('./results/poos/{}'.format(var_name))
@@ -130,19 +131,19 @@ def selector(case, **kwargs):
                     features_names=fl_master.features_names, labels_names=fl_master.labels_names,
                     y_names=fl_master.y_names)
         poos_experiment(fl_master=fl_master, fl=fl, est_dates=est_dates, z_type=1, h=1, h_idx=0,
-                        m_max=3, p_max=12, model_mode=model_mode, save_dir=results_dir,first_est_date=first_est_date,
+                        m_max=3, p_max=12, model_mode=model_mode, save_dir=results_dir, first_est_date=first_est_date,
                         )
         poos_experiment(fl_master=fl_master, fl=fl, est_dates=est_dates, z_type=1, h=3, h_idx=1,
-                        m_max=3, p_max=12, model_mode=model_mode, save_dir=results_dir,first_est_date=first_est_date,
+                        m_max=3, p_max=12, model_mode=model_mode, save_dir=results_dir, first_est_date=first_est_date,
                         )
         poos_experiment(fl_master=fl_master, fl=fl, est_dates=est_dates, z_type=1, h=6, h_idx=2,
-                        m_max=3, p_max=12, model_mode=model_mode, save_dir=results_dir,first_est_date=first_est_date,
+                        m_max=3, p_max=12, model_mode=model_mode, save_dir=results_dir, first_est_date=first_est_date,
                         )
         poos_experiment(fl_master=fl_master, fl=fl, est_dates=est_dates, z_type=1, h=12, h_idx=3,
-                        m_max=3, p_max=12, model_mode=model_mode, save_dir=results_dir,first_est_date=first_est_date,
+                        m_max=3, p_max=12, model_mode=model_mode, save_dir=results_dir, first_est_date=first_est_date,
                         )
         poos_experiment(fl_master=fl_master, fl=fl, est_dates=est_dates, z_type=1, h=24, h_idx=4,
-                        m_max=3, p_max=12, model_mode=model_mode, save_dir=results_dir,first_est_date=first_est_date,
+                        m_max=3, p_max=12, model_mode=model_mode, save_dir=results_dir, first_est_date=first_est_date,
                         )
 
         poos_processed_data_analysis(
@@ -158,9 +159,8 @@ def selector(case, **kwargs):
                      '12',
                      '24',
                      ],
-            results_dir=results_dir,
-            model_mode=model_mode,
-            nber_excel_dir='./excel/NBER_062020.xlsx')
+            results_dir=results_dir, model_mode=model_mode, nber_excel_dir='./excel/NBER_062020.xlsx',
+            est_dates=est_dates, first_est_date=first_est_date)
 
     elif case == 5:
         # Forecast evaluation DM
@@ -188,8 +188,9 @@ def selector(case, **kwargs):
                                             in h_store],
                                   pca_store=[f'./results/poos/poos_{var_name}_pca/poos_pca_h{h}_analysis_results.pkl'
                                              for h in h_store],
-                                  xgb_store=[f'./results/poos/poos_{var_name}_xgba_rh_s42/poos_xgb_h{h}_analysis_results.pkl'
-                                             for h in h_store],
+                                  xgb_store=[
+                                      f'./results/poos/poos_{var_name}_xgba_rh_s42/poos_xgb_h{h}_analysis_results.pkl'
+                                      for h in h_store],
                                   results_dir=results_dir,
                                   blocked_dates=dates,
                                   first_est_date=first_est_date,
@@ -216,5 +217,5 @@ def selector(case, **kwargs):
 
 
 if __name__ == '__main__':
-    selector(case=5, excel_dir='./excel/dataset_0720/INDPRO_data_loader.xlsx', var_name='poos_IND_ar')
-    #selector(case=3, excel_dir='./excel/dataset2/INDPRO_data_loader.xlsx', var_name='poos_IND_ar')
+    selector(case=2, excel_dir='./excel/dataset_0720/INDPRO_data_loader.xlsx', var_name='poos_IND_ar')
+    # selector(case=3, excel_dir='./excel/dataset2/INDPRO_data_loader.xlsx', var_name='poos_IND_ar')
