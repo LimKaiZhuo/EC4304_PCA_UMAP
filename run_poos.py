@@ -21,40 +21,72 @@ def selector(case, **kwargs):
                         time_stamp=None, time_idx=None,
                         features_names=fl_master.features_names, labels_names=fl_master.labels_names,
                         y_names=fl_master.y_names)
+
         first_est_date = '1970:1'
         est_dates = [f'{x}:12' for x in range(1969, 2020, 5)[:-1]]
+        model_mode = 'rf'
+        if model_mode == 'xgb' or model_mode == 'xgb_with_hparam':
+            default_hparams = {'seed': 42,
+                               'booster': 'gbtree',
+                               'learning_rate': 0.1,
+                               'objective': 'reg:squarederror',
+                               'verbosity': 0,
+                               'subsample': 1,
+                               'num_boost_round': 600,
+                               'early_stopping_rounds': 100,
+                               'ehat_eval': None,
+                               # 'eval_metric':['rmse'],
+                               # DART params
+                               'rate_drop': 0.2,
+                               'skip_drop': 0.5,
+                               # params that will vary
+                               'm': 6,
+                               'p': 12,
+                               'max_depth': 1,
+                               'colsample_bytree': 0.5,
+                               }
+            hparam_opt_params = {'hparam_mode': 'bo', 'n_calls': 200, 'n_random_starts': 150,
+                                 'val_mode': 'rep_holdout',
+                                 'n_blocks': 5, 'cut_point': 0.95,
+                                 'variables': {'max_depth': {'type': 'Integer', 'lower': 1, 'upper': 6},
+                                               'colsample_bytree': {'type': 'Real', 'lower': 0.5, 'upper': 1},
+                                               'm': {'type': 'Integer', 'lower': 1, 'upper': 24},
+                                               # 'p': {'type': 'Integer', 'lower': 1, 'upper': 48},
+                                               'adap_gamma': {'type': 'Real', 'lower': -2, 'upper': 1.5}
+                                               },
+                                 }
+        elif model_mode == 'rf':
+            default_hparams = {'seed': 42,
+                               'booster': 'gbtree',
+                               'learning_rate': 1,
+                               'objective': 'reg:squarederror',
+                               'verbosity': 0,
+                               'subsample': 1,
+                               'num_boost_round': 1,
+                               'early_stopping_rounds': None,
+                               'ehat_eval': None,
+                               # 'eval_metric':['rmse'],
+                               # params that will vary
+                               'm': 6,
+                               'p': 12,
+                               'max_depth': 1,
+                               'colsample_bytree': 1,
+                               }
+            hparam_opt_params = {'hparam_mode': 'bo', 'n_calls': 200, 'n_random_starts': 150,
+                                 'val_mode': 'rep_holdout',
+                                 'n_blocks': 5, 'cut_point': 0.95,
+                                 'variables': {'max_depth': {'type': 'Integer', 'lower': 1, 'upper': 6},
+                                               'subsample': {'type': 'Real', 'lower': 0.5, 'upper': 1},
+                                               'colsample_bytree': {'type': 'Real', 'lower': 0.5, 'upper': 1},
+                                               'm': {'type': 'Integer', 'lower': 1, 'upper': 24},
+                                               # 'p': {'type': 'Integer', 'lower': 1, 'upper': 48},
+                                               'num_parallel_tree': {'type': 'Integer', 'lower': 1, 'upper': 1200}
+                                               },
+                                 }
+        else:
+            default_hparams=None
+            hparam_opt_params = None
 
-        default_hparams = {'seed': 42,
-                           'booster': 'gbtree',
-                           'learning_rate': 0.1,
-                           'objective': 'reg:squarederror',
-                           'verbosity': 0,
-                           'subsample': 1,
-                           'num_boost_round': 600,
-                           'early_stopping_rounds': 100,
-                           'ehat_eval':None,
-                           #'eval_metric':['rmse'],
-                           # DART params
-                           'rate_drop': 0.2,
-                           'skip_drop': 0.5,
-                           # params that will vary
-                           'm': 6,
-                           'p': 12,
-                           'max_depth': 1,
-                           'colsample_bytree': 0.5,
-                           }
-
-        hparam_opt_params = {'hparam_mode': 'bo', 'n_calls': 200, 'n_random_starts': 150,
-                             'val_mode': 'rep_holdout',
-                             'n_blocks': 5, 'cut_point': 0.95,
-                             'variables': {'max_depth': {'type': 'Integer', 'lower': 1, 'upper': 6},
-                                           'colsample_bytree': {'type': 'Real', 'lower': 0.5, 'upper': 1},
-                                           'm': {'type': 'Integer', 'lower': 1, 'upper': 24},
-                                           # 'p': {'type': 'Integer', 'lower': 1, 'upper': 48},
-                                           'adap_gamma': {'type': 'Real', 'lower': -2, 'upper': 1.5}
-                                           },
-                             }
-        model_mode = 'xgb'
         hparam_save_dir = './results/poos/poos_IND_xgbar'
         poos_experiment(fl_master=fl_master, fl=fl_xgb, est_dates=est_dates, z_type=1, h=1, h_idx=0,
                         m_max=12, p_max=24, model_mode=model_mode, save_dir=results_dir, first_est_date=first_est_date,
@@ -93,4 +125,4 @@ def selector(case, **kwargs):
 
 
 if __name__ == '__main__':
-    selector(case=1, excel_dir='./excel/dataset_0720/W875RX1_data_loader.xlsx', var_name='poos_W875_xgba_rh_s42')
+    selector(case=1, excel_dir='./excel/dataset_0720/INDPRO_data_loader.xlsx', var_name='poos_IND_rf_rh_s42')
