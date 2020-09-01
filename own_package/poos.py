@@ -6,9 +6,9 @@ import openpyxl
 import matplotlib.pyplot as plt
 from arch.bootstrap import MCS, SPA
 from own_package.boosting import Xgboost
-from own_package.analysis import LocalLevel
+from own_package.ssm import LocalLevel, SSMBase
 from own_package.others import print_df_to_excel, create_excel_file
-import pickle, time, itertools, shap
+import pickle, time, itertools, shap, collections
 
 first_est_date = '1970:1'
 
@@ -27,7 +27,6 @@ def poos_experiment(fl_master, fl, est_dates, z_type, h, h_idx, m_max, p_max, fi
     if model_mode == 'xgb_with_hparam':
         with open(f'{kwargs["hparam_save_dir"]}/poos_h{h}.pkl', 'rb') as handle:
             hparam_data_store = pickle.load(handle)
-
 
     for idx, (est_date, next_tune_date) in enumerate(zip(est_dates[:-1], est_dates[1:])):
         t1 = time.perf_counter()
@@ -53,7 +52,7 @@ def poos_experiment(fl_master, fl, est_dates, z_type, h, h_idx, m_max, p_max, fi
             hparams['m'] = int(hparams['m'])
             hparams['max_depth'] = int(hparams['max_depth'])
             hparams['ehat_eval'] = forecast_error
-            _, _, _, poos_data_store = fl.pls_expanding_window(h=h, p=hparams['m'] * 2, m=hparams['m'], r=8,
+            _, _, _, poos_data_store = fl.pls_expanding_window(h=h, p=hparams['m'] * 2, m=hparams['m'], r=9,
                                                                cw_model_class=Xgboost,
                                                                cw_hparams=hparams,
                                                                x_t=x_est,
@@ -228,12 +227,23 @@ def poos_analysis(fl_master, h, h_idx, model_mode, est_mode, results_dir, save_d
             current_window.append(y)
         return best_idx_store, predicted_idx
 
+    def calculate_ssm_ntree(hparam_ntree, optimal_ntree, mode, burn_periods=10):
+        best_idx_store = optimal_ntree
+        predicted_idx = [hparam_ntree] + optimal_ntree[:(burn_periods - 1)]
+        current_window = best_idx_store[:burn_periods]
+        for y in best_idx_store[burn_periods:]:
+            base = SSMBase(mode=mode)
+            base.fit(X=current_window)
+            predicted_idx.append(int(max(min(base.predict(), 599), 0)))
+            current_window.append(y)
+        return predicted_idx, base.res_
+
     def calculate_horizon_rmse_ae(block_ae, block_ehat, sequence_ntree):
         return np.average([ae[idx] ** 2 for ae, idx in zip(block_ae, sequence_ntree)]) ** 0.5, \
                [ehat[idx] for ehat, idx in zip(block_ehat, sequence_ntree)]
 
     def calculate_hparam_ntree(hparam_df):
-        if est_mode == 'rep_holdout':
+        if est_mode == 'rh':
             div_factor = 0.85
         elif est_mode == 'rfcv':
             div_factor = 0.8
@@ -248,9 +258,7 @@ def poos_analysis(fl_master, h, h_idx, model_mode, est_mode, results_dir, save_d
 
     if model_mode == 'xgb':
         index_products = [('y', str(idx)) for idx in range(3)]
-
         score_df = pd.DataFrame(index=pd.MultiIndex.from_tuples(index_products, names=['Variable', 'Lag'])).T
-
         ae_store = []
         ehat_store = []
         optimal_ntree_store = []
@@ -258,6 +266,11 @@ def poos_analysis(fl_master, h, h_idx, model_mode, est_mode, results_dir, save_d
         rw_ntree_store = []
         hparam_ntree_store = []
         block_store = []
+        ssm_modes = ['arima*ln', 'll', 'lls', 'llt', 'llc', 'll*ln', 'lls*ln', 'llt*ln', 'llc*ln', ]
+        ssm_store = {}
+        for k in ssm_modes:
+            ssm_store[k] = {f'{k}_ntree': [], f'{k}_ehat': [], f'{k}_res': []}
+
         for idx, data in enumerate(data_store):
             for single_step in data['poos_data_store']:
                 scores = {(k.partition('_L')[0], k.partition('_L')[-1]): v for k, v in
@@ -269,58 +282,76 @@ def poos_analysis(fl_master, h, h_idx, model_mode, est_mode, results_dir, save_d
             block_ehat = [single_step['progress']['h_step_ahead']['ehat'] for single_step in data['poos_data_store']]
             ae_store.extend(block_ae)
             ehat_store.extend(block_ehat)
+
             hparam_ntree = calculate_hparam_ntree(data['hparams_df'])
-            optimal_ntree, predicted_ntree = calculate_sequence_ntree(block_ae=block_ae,
-                                                                      hparam_ntree=hparam_ntree)
+            optimal_ntree = list(np.argmin(block_ae, axis=1))
             optimal_ntree_store.extend(optimal_ntree)
-            rw_ntree_store.extend([hparam_ntree]*5+optimal_ntree[4:-1])
-            predicted_ntree_store.extend(predicted_ntree)
+
+            for k, v in ssm_store.items():
+                ntree, res = calculate_ssm_ntree(hparam_ntree, optimal_ntree, mode=k)
+                v[f'{k}_ntree'].extend(ntree)
+                v[f'{k}_res'].append(res)
+
+            # _, predicted_ntree = calculate_sequence_ntree(block_ae=block_ae,
+            #                                                           hparam_ntree=hparam_ntree)
+            # predicted_ntree_store.extend(predicted_ntree)
+
+            rw_ntree_store.extend([hparam_ntree] + optimal_ntree[:-1])
             hparam_ntree_store.extend([hparam_ntree] * len(optimal_ntree))
 
         # Full SSM prediction
-        _, ssm_full_ntree_store = calculate_sequence_ntree(block_ae=ae_store,
-                                                           hparam_ntree=min(int(round(data_store[0]['hparams_df'].iloc[
-                                                                                          0, data_store[0][
-                                                                                              'hparams_df'].columns.tolist().
-                                                                                      index('m iters')] / 0.85)),
-                                                                            600) - 1)
-
+        # _, ssm_full_ntree_store = calculate_sequence_ntree(block_ae=ae_store, hparam_ntree=hparam_ntree_store[0])
+        ll_full_ntree, ll_full_res = calculate_ssm_ntree(hparam_ntree=hparam_ntree_store[0],
+                                                         optimal_ntree=optimal_ntree_store,
+                                                         mode='ll*ln', burn_periods=24)
         # Horizons RMSE calculation
+        _, ll_full_ehat = calculate_horizon_rmse_ae(ae_store, ehat_store, ll_full_ntree)
         oracle_rmse, oracle_ehat = calculate_horizon_rmse_ae(ae_store, ehat_store, optimal_ntree_store)
         max_iter_rmse, max_iter_ehat = calculate_horizon_rmse_ae(ae_store, ehat_store, [-1] * len(ae_store))
         hparam_rmse, hparam_ehat = calculate_horizon_rmse_ae(ae_store, ehat_store, hparam_ntree_store)
-        ssm_rmse, ssm_ehat = calculate_horizon_rmse_ae(ae_store, ehat_store, predicted_ntree_store)
-        ssm_full_rmse, ssm_full_ehat = calculate_horizon_rmse_ae(ae_store, ehat_store, ssm_full_ntree_store)
+        # _, ssm_ehat = calculate_horizon_rmse_ae(ae_store, ehat_store, predicted_ntree_store)
+        # ssm_full_rmse, ssm_full_ehat = calculate_horizon_rmse_ae(ae_store, ehat_store, ssm_full_ntree_store)
         rw_rmse, rw_ehat = calculate_horizon_rmse_ae(ae_store, ehat_store, rw_ntree_store)
 
-        df = pd.DataFrame.from_dict({'time_stamp': ts,
-                                     'hparam_block': block_store,
-                                     f'y_{h}': y,
-                                     'oracle_ehat': oracle_ehat,
-                                     'ssm_ehat': ssm_ehat,
-                                     'ssm_full_ehat': ssm_full_ehat,
-                                     'rw_ehat': rw_ehat,
-                                     'hparam_ehat': hparam_ehat,
-                                     'max_iter_ehat': max_iter_ehat,
-                                     'oracle_ntree': optimal_ntree_store,
-                                     'ssm_ntree': predicted_ntree_store,
-                                     'ssm_full_ntree': ssm_full_ntree_store,
-                                     'rw_ntree':rw_ntree_store,
-                                     'hparam_ntree': hparam_ntree_store}).set_index('time_stamp')
+        for k, v in ssm_store.items():
+            _, ehat = calculate_horizon_rmse_ae(ae_store, ehat_store, v[f'{k}_ntree'])
+            v[f'{k}_ehat'] = ehat
 
-        # df.plot(y=['oracle_ehat', 'ssm_ehat', 'ssm_full_ehat', 'hparam_ehat', 'max_iter_ehat'], use_index=True)
+        df = pd.DataFrame.from_dict({**{'time_stamp': ts,
+                                        'hparam_block': block_store,
+                                        f'y_{h}': y,
+                                        'oracle_ehat': oracle_ehat,
+                                        'll_full_ehat': ll_full_ehat,
+                                        # 'ssm_ehat': ssm_ehat,
+                                        # 'ssm_full_ehat': ssm_full_ehat,
+                                        'rw_ehat': rw_ehat,
+                                        'hparam_ehat': hparam_ehat,
+                                        'max_iter_ehat': max_iter_ehat,
+                                        'oracle_ntree': optimal_ntree_store,
+                                        # 'ssm_full_ntree': ssm_full_ntree_store,
+                                        'll_full_ntree': ll_full_ntree,
+                                        'rw_ntree': rw_ntree_store,
+                                        'hparam_ntree': hparam_ntree_store},
+                                     **{kk: vv for _, v in ssm_store.items() for kk, vv in v.items() if
+                                        'ntree' in kk or 'ehat' in kk}}).set_index(
+            'time_stamp')
 
-        rmse_df = pd.DataFrame.from_dict({'oracle_rmse': [oracle_rmse],
-                                          'ssm_rmse': [ssm_rmse],
-                                          'ssm_full_rmse': [ssm_full_rmse],
-                                          'hparam_rmse': [hparam_rmse],
-                                          'max_iter_rmse': [max_iter_rmse]})
+        res_store = {k: v[f'{k}_res'] for k, v in ssm_store.items()}
 
         hparam_df = [data['hparams_df'].iloc[0, :] for data in data_store]
         hparam_df = pd.concat(hparam_df, axis=1).T
 
         with open(f'{results_dir}/poos_{model_mode}_h{h}_analysis_results.pkl', "wb") as file:
-            pickle.dump({'data_df': df, 'rmse_df': rmse_df, 'hparam_df': hparam_df}, file)
+            pickle.dump({'data_df': df, 'hparam_df': hparam_df, 'res_store': res_store}, file)
+    elif model_mode == 'rf':
+        df = pd.DataFrame.from_dict({'time_stamp': ts,
+                                     f'y_{h}': y,
+                                     'rf_ehat': [step['progress']['h_step_ahead']['ehat'][0] for block in data_store for step in
+                                                 block['poos_data_store']], }).set_index('time_stamp')
+        hparam_df = data_store[0]['hparams_df'].iloc[[0], :]
+
+        with open(f'{results_dir}/poos_{model_mode}_h{h}_analysis_results.pkl', "wb") as file:
+            pickle.dump({'data_df': df, 'hparam_df': hparam_df}, file)
 
 
 def poos_analysis_combining_xgb(h, results_dir, poos_post_dir_store):
@@ -340,45 +371,85 @@ def poos_analysis_combining_xgb(h, results_dir, poos_post_dir_store):
     hparam_df = pd.concat(hparam_df_store).groupby(level=0).mean()
 
     with open(f'{results_dir}/poos_xgb_h{h}_analysis_results.pkl', "wb") as file:
-        pickle.dump({'data_df': data_df, 'hparam_df':hparam_df}, file)
+        pickle.dump({'data_df': data_df, 'hparam_df': hparam_df}, file)
 
 
-def poos_xgb_plotting_m(h, results_dir):
+def poos_xgb_plotting_m(h, results_dir, ssm_modes):
     with open(f'{results_dir}/poos_xgb_h{h}_analysis_results.pkl', 'rb') as handle:
         data = pickle.load(handle)
+
+    def plots(df, names, plot_name):
+        names = [f'{x}_ntree' for x in names]
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.margins(x=0.01, y=0.01)
+        df.plot(kind='line', y=['oracle_ntree'] + names, ax=ax, marker='o', ms=1.5, lw=0.5)
+        ax.set_ylabel('ntrees')
+        fig.tight_layout()
+        fig.savefig(f'{results_dir}/{plot_name}_ntrees_vs_time_h{h}.png', transparent=False, dpi=300,
+                    bbox_inches="tight")
+        plt.close()
+
+        temp = df[names].transform(lambda x: np.log(x + 1))
+        temp['oracle_ntree'] = df['oracle_ntree'].transform(lambda x: np.log(x + 1))
+        fig, ax = plt.subplots(figsize=(10, 6))
+        ax.margins(x=0.01, y=0.01)
+        temp.plot(kind='line', y=['oracle_ntree'] + names, ax=ax, marker='o', ms=1.5, lw=0.5)
+        ax.set_ylabel('ln(ntrees+1)')
+        fig.tight_layout()
+        fig.savefig(f'{results_dir}/{plot_name}_ln_ntrees_vs_time_h{h}.png', transparent=False, dpi=300,
+                    bbox_inches="tight")
+        plt.close()
+
+    # Plot ntree vs time
     df = data['data_df']
-    fig, ax = plt.subplots(figsize=(10, 6))
-    ax.margins(x=0.01, y=0.01)
-    df.plot(kind='line', y=['oracle_ntree', 'ssm_ntree'], ax=ax, marker='o', ms=1.5)
-    ax.set_ylabel('ntrees')
-    fig.tight_layout()
-    fig.savefig(f'{results_dir}/ntrees_vs_time_h{h}.png', transparent=False, dpi=300, bbox_inches="tight")
+    plots(df, ['ll', 'll*ln', 'll_full'], plot_name='ll')
+    plots(df, ['llt', 'llt*ln'], plot_name='llt')
+    plots(df, ['lls', 'lls*ln'], plot_name='lls')
+    plots(df, ['llc', 'llc*ln'], plot_name='llc')
+
+    # Plot last block residual diagnostics
+    for k, v in data['res_store'].items():
+        if not 'arima' in k:
+            plt.close()
+            v[-1].plot_diagnostics()
+            name = k.replace('*', '_')
+            plt.tight_layout(rect=[0, 0.03, 1, 0.95])  # to make subtitles not overlap with x axis label
+            plt.savefig(f'{results_dir}/{name}_residual_diagnostics_h{h}.png')
+    plt.close()
 
     with open(f'{results_dir}/poos_h{h}.pkl', 'rb') as handle:
         data = pickle.load(handle)
-    ehat_store = np.array([step['progress']['h_step_ahead']['rmse'] for block in data for step in block['poos_data_store']])
-    ehat_store = (ehat_store-ehat_store.min(axis=1)[:,None])/(ehat_store.max(axis=1)[:,None]-ehat_store.min(axis=1)[:,None])
+    ehat_store = np.array(
+        [step['progress']['h_step_ahead']['rmse'] for block in data for step in block['poos_data_store']])
+    ehat_store = (ehat_store - ehat_store.min(axis=1)[:, None]) / (
+            ehat_store.max(axis=1)[:, None] - ehat_store.min(axis=1)[:, None])
     ehat_df = pd.DataFrame(ehat_store.T, columns=df.index.values)
     fig, ax = plt.subplots()
     ax.margins(x=0.01, y=0.01)
-    y_store = ['1970:1', '1983:1', '2007:1', '2020:3']
-    ehat_df.plot(kind='line', y=y_store, ax=ax)
+    try:
+        y_store = ['1970:1', '1983:1', '2007:1', '2020:3']
+        ehat_df.plot(kind='line', y=y_store, ax=ax, lw=0.5)
+    except KeyError:
+        y_store = ['2005:1', '2010:1', '2010:2']
+        ehat_df.plot(kind='line', y=y_store, ax=ax, lw=0.5)
+
     ax.set_ylabel('|ehat|')
     ax.set_xlabel('ntrees')
     ax.legend(loc='right')
     for y in y_store:
-        ax.scatter(df.loc[y]['ssm_ntree'], ehat_df[y].iloc[int(df.loc[y]['ssm_ntree'])], marker='x', s=100)
+        ax.scatter(df.loc[y][f'{ssm_modes[0]}_ntree'], ehat_df[y].iloc[int(df.loc[y][f'{ssm_modes[0]}_ntree'])],
+                   marker='x', s=70)
     fig.tight_layout()
-    fig.savefig(f'{results_dir}/ehat_vs_ntrees_h{h}.png', transparent=False, dpi=300, bbox_inches="tight")
+    fig.savefig(f'{results_dir}/{ssm_modes[0]}ehat_vs_ntrees_h{h}.png', transparent=False, dpi=300, bbox_inches="tight")
 
 
-
-def poos_processed_data_analysis(results_dir, save_dir_store, h_store, model_mode, nber_excel_dir, first_est_date, est_dates):
+def poos_processed_data_analysis(results_dir, save_dir_store, h_store, model_full_name, nber_excel_dir, first_est_date,
+                                 est_dates, model, combinations=None):
     if first_est_date == '2005:1':
         # Means it is expt 1. Skip NBER and structural RMSE windows
-        skip=True
+        skip = True
     else:
-        skip=False
+        skip = False
         # Load NBER dates
         nber = pd.read_excel(nber_excel_dir, sheet_name='main')
         peaks = pd.DatetimeIndex(pd.to_datetime(nber['Peak month']))[1:]  # First month is NaN
@@ -401,6 +472,18 @@ def poos_processed_data_analysis(results_dir, save_dir_store, h_store, model_mod
             data_store = pickle.load(handle)
 
         data_df = data_store['data_df']
+        if model == 'xgb':
+            if combinations:
+                combinations_store = []
+                for combi in combinations:
+                    combi_name = '+'.join(combi) + '_ehat'
+                    combinations_store.append(
+                        pd.DataFrame(data_df[[x for x in data_df.columns if 'y_' in x]].values.squeeze() -
+                                     (data_df[[x for x in data_df.columns if 'y_' in x]].values
+                                      - data_df[[f'{x}_ehat' for x in combi]]).mean(axis=1),
+                                     columns=[combi_name]))
+                data_df = pd.concat([data_df] + combinations_store, axis=1)
+
         ehat_df = data_df[[x for x in data_df.columns.values if '_ehat' in x]]
         ehat_df.columns = [name.replace('ehat', 'rmse') for name in ehat_df.columns.values]
         time_stamps = data_df.index.tolist()
@@ -411,8 +494,8 @@ def poos_processed_data_analysis(results_dir, save_dir_store, h_store, model_mod
             rmse_store.append((ehat_df.iloc[start:end, :] ** 2).mean(axis=0) ** 0.5)
 
         if not skip:
-            start_store = ['1970:1','1970:1', '1970:1', '1983:1', '2007:1', '2019:12']  # Inclusive
-            end_store = ['2020:1','2020:12', '1983:1', '2007:1', '2020:1', '2020:12']  # Exclusive of those dates
+            start_store = ['1970:1', '1970:1', '1970:1', '1983:1', '2007:1', '2019:12']  # Inclusive
+            end_store = ['2020:1', '2020:12', '1983:1', '2007:1', '2020:1', '2020:12']  # Exclusive of those dates
 
             for start, end in zip(start_store, end_store):
                 start = time_stamps.index(start)
@@ -424,7 +507,7 @@ def poos_processed_data_analysis(results_dir, save_dir_store, h_store, model_mod
                     rmse_store.append((ehat_df.iloc[start:, :] ** 2).mean(axis=0) ** 0.5)
 
             # NBER Expansionary and Recessionary
-            rmse_store.append((ehat_df.loc[nber_df['business_cycle']==1, :] ** 2).mean(axis=0) ** 0.5)
+            rmse_store.append((ehat_df.loc[nber_df['business_cycle'] == 1, :] ** 2).mean(axis=0) ** 0.5)
             rmse_store.append((ehat_df.loc[nber_df['business_cycle'] == 0, :] ** 2).mean(axis=0) ** 0.5)
         else:
             start_store = ['2005:1', '2020:1']  # Inclusive
@@ -442,14 +525,15 @@ def poos_processed_data_analysis(results_dir, save_dir_store, h_store, model_mod
         # Combining data into dataframe
         df = pd.concat((pd.concat(rmse_store, axis=1).T, data_store['hparam_df'].reset_index()), axis=1)
         if not skip:
-            df['start_dates'] = [f'{x}:1' for x in range(1970, 2020, 5)] + start_store + ['Expansionary', 'Recessionary']
+            df['start_dates'] = [f'{x}:1' for x in range(1970, 2020, 5)] + start_store + ['Expansionary',
+                                                                                          'Recessionary']
             df['end_dates'] = [f'{x}:1' for x in range(1970, 2020, 5)[1:]] + [time_stamps[-1]] + end_store + ['', '']
         else:
             df['start_dates'] = [first_est_date] + est_dates + start_store
             df['end_dates'] = est_dates + [time_stamps[-1]] + end_store
         df_store.append(df)
 
-    excel_name = create_excel_file(f'{results_dir}/poos_analysis_{model_mode}.xlsx')
+    excel_name = create_excel_file(f'{results_dir}/poos_analysis_{model_full_name}.xlsx')
     wb = openpyxl.Workbook()
     for df, h in zip(df_store, h_store):
         wb.create_sheet(f'h{h}')
@@ -459,8 +543,8 @@ def poos_processed_data_analysis(results_dir, save_dir_store, h_store, model_mod
     wb.save(excel_name)
 
 
-def poos_model_evaluation(fl_master, ar_store, pca_store, xgb_store, results_dir, blocked_dates, blocks,
-                          first_est_date):
+def poos_model_evaluation(fl_master, ar_store, pca_store, xgb_stores, results_dir, blocked_dates, blocks,
+                          first_est_date, est_dates, combinations=None):
     def xl_test(x):
         n = x.shape[0]
         u = x - x.mean()
@@ -522,9 +606,7 @@ def poos_model_evaluation(fl_master, ar_store, pca_store, xgb_store, results_dir
         else:
             raise KeyError('slice_mode should be number or index.')
 
-    def compute_mcs(e2_df, drop_cols=None):
-        if drop_cols:
-            e2_df = e2_df.drop(drop_cols, axis=1)
+    def compute_mcs(e2_df):
         mcs = MCS(e2_df.copy(), size=0.1)
         try:
             mcs.compute()
@@ -533,9 +615,9 @@ def poos_model_evaluation(fl_master, ar_store, pca_store, xgb_store, results_dir
             # Means it is the 1970:1 block where ssm and ssm full is exactly the same.
             # So need to remove ssm full
             blank = pd.Series()
-            if (e2_df['ssm_full_ehat^2'] == e2_df['ssm_ehat^2']).all():
-                e2_df = e2_df.drop('ssm_full_ehat^2', axis=1)
-                blank['ssm_full_ehat^2'] = 0
+            if (e2_df['llc_full_ehat^2'] == e2_df['llc_ehat^2']).all():
+                e2_df = e2_df.drop('llcfull_ehat^2', axis=1)
+                blank['llc_full_ehat^2'] = 0
             if (e2_df['hparam_ehat^2'] == e2_df['max_iter_ehat^2']).all():
                 e2_df = e2_df.drop('max_iter_ehat^2', axis=1)
                 blank['max_iter_ehat^2'] = 0
@@ -579,54 +661,97 @@ def poos_model_evaluation(fl_master, ar_store, pca_store, xgb_store, results_dir
         f.legend(lines, labels, loc='lower right')
         plt.savefig(save_dir, bbox_inches='tight')
 
+    def get_keyword_df_from_data(data, keyword, column_header=None):
+        df = data['data_df'].copy()
+        df = df[[x for x in df.columns if keyword in x]]
+        if column_header:
+            df.columns = [f'{column_header}_{x}' for x in df.columns]
+        return df
+
     idx = fl_master.time_stamp.index(first_est_date)
     ts = fl_master.time_stamp[idx:]
 
     h_store = 1, 3, 6, 12, 24
     results_store = {}
-    mcs_store = {}
-    mcs_store_no_oracle = {}
-    spa_store = {'no_oracle': {},
-                 'selected': {}}
+    selected_store = [[('drop',None),('drop',None),('drop',None),('drop',None),],
+                      [('drop','oracle'),('drop','oracle'),('drop','oracle'),('drop','oracle'),],
+                      [('drop','oracle'),('keep',None),('keep',None),('keep',None),],
+                      [('keep',['_rw_','_ll*ln_','_rw+ll*ln_',]),('keep',None),('keep',None),('keep',None),],
+                      [('keep','_rw_'),('keep',None),('keep',None),('keep',None),],]
+    name_store = ['all', 'all-oracle', 'xgbarh-oracle', 'xgbarh(selected)', 'xgbarh(rw)']
+    xgb_names = ['xgba(rh)', 'xgba(rfcv)', 'rf(rh)', 'rf(rfcv)']
+    mcs_store = collections.defaultdict(dict)
+    spa_store = collections.defaultdict(dict)
     if blocks:
-        est_dates = [f'{x}:12' for x in range(1969, 2020, 5)[1:-1]]
+        est_dates = est_dates[1:]
         est_dates_idx = [0] + [ts.index(est) + 1 for est in est_dates] + [-1]
 
-        for h, ar, pca, xgb in zip(h_store, ar_store, pca_store, xgb_store):
+        for h, ar, pca, xgb_store in zip(h_store, ar_store, pca_store, xgb_stores):
             with open(ar, 'rb') as handle:
                 ar_data = pickle.load(handle)
+                ar_ehatdf = get_keyword_df_from_data(ar_data, keyword='_ehat', column_header='ar')
             with open(pca, 'rb') as handle:
                 pca_data = pickle.load(handle)
-            with open(xgb, 'rb') as handle:
-                xgb_data = pickle.load(handle)
-            model_data = pd.concat([pca_data['data_df'], xgb_data['data_df']], axis=1)
-            d_vectors = (ar_data['data_df']['ar_ehat'].values ** 2)[..., None] - \
-                        model_data[[x for x in model_data.columns.values if '_ehat' in x]].values ** 2
+                pca_ehatdf = get_keyword_df_from_data(pca_data, '_ehat', column_header='pca')
+            xgb_ehatdf_store = []
+            for xgb, name in zip(xgb_store, xgb_names):
+                with open(xgb, 'rb') as handle:
+                    xgb_data = pickle.load(handle)
+                    combinations_store = []
+                    data_df = get_keyword_df_from_data(xgb_data, '_ehat', column_header=name)
+                    if combinations and 'xgb' in name:
+                        for combi in combinations:
+                            combi_name = '+'.join(combi) + '_ehat'
+                            combinations_store.append(
+                                pd.DataFrame(xgb_data['data_df'][[f'y_{h}']].values.squeeze() -
+                                             (xgb_data['data_df'][[f'y_{h}']].values
+                                              - data_df[[f'{name}_{x}_ehat' for x in combi]]).mean(axis=1),
+                                             columns=[f'{name}_{combi_name}']))
+                        xgb_ehatdf = pd.concat([data_df] + combinations_store, axis=1)
+                    else:
+                        xgb_ehatdf = get_keyword_df_from_data(xgb_data, '_ehat', column_header=name)
+                xgb_ehatdf_store.append(xgb_ehatdf)
 
-            losses_data = pd.concat([ar_data['data_df'], pca_data['data_df'], xgb_data['data_df']], axis=1)
-            losses_data = losses_data[[x for x in losses_data.columns.values if '_ehat' in x]] ** 2
+            model_data = pd.concat([pca_ehatdf]+xgb_ehatdf_store, axis=1)
+            d_vectors = (ar_ehatdf['ar_ar_ehat'].values ** 2)[..., None] - \
+                        model_data.values ** 2
+
+            losses_data = pd.concat([ar_ehatdf, pca_ehatdf]+ xgb_ehatdf_store, axis=1)** 2
             losses_data.columns = [f'{x}^2' for x in losses_data.columns]
 
             for start, end in zip(est_dates_idx[:-1], est_dates_idx[1:]):
                 p_values = np.apply_along_axis(lambda x: sm.tsa.stattools.kpss(x),
                                                axis=0, arr=d_vectors[start:end])[1, :]
-                #p_xl_values = np.apply_along_axis(lambda x: xl_test(x),
+                # p_xl_values = np.apply_along_axis(lambda x: xl_test(x),
                 #                                  axis=0, arr=d_vectors[start:end])
                 results_store[f'h{h}_{ts[start]}~{ts[end]}'] = np.concatenate((p_values, p_values))
 
-                series = compute_mcs(e2_df=losses_data.iloc[start:end].copy(), drop_cols=None)
-                series_no_oracle = compute_mcs(e2_df=losses_data.iloc[start:end].copy(), drop_cols=['oracle_ehat^2'])
-                mcs_store[f'h{h}_{ts[start]}~{ts[end]}'] = series
-                mcs_store_no_oracle[f'h{h}_{ts[start]}~{ts[end]}'] = series_no_oracle
+                #series = compute_mcs(e2_df=losses_data.iloc[start:end].copy(), drop_cols=None)
+                #series_no_oracle = compute_mcs(e2_df=losses_data.iloc[start:end].copy(), drop_cols=['oracle_ehat^2'])
+                #mcs_store[f'h{h}_{ts[start]}~{ts[end]}'] = series
+                #mcs_store_no_oracle[f'h{h}_{ts[start]}~{ts[end]}'] = series_no_oracle
 
-                for k, _ in spa_store.items():
-                    if k == 'no_oracle':
-                        spa_store[k][f'h{h}_{ts[start]}~{ts[end]}'] = compute_spa(
-                            losses_data.iloc[start:end].drop('oracle_ehat^2', axis=1))
-                    elif k == 'selected':
-                        spa_store[k][f'h{h}_{ts[start]}~{ts[end]}'] = compute_spa(
-                            losses_data.iloc[start:end].drop(
-                                ['oracle_ehat^2', 'ssm_full_ehat^2', 'hparam_ehat^2', 'max_iter_ehat^2'], axis=1))
+                for name, selection in zip(name_store, selected_store):
+                    df = losses_data.copy()
+                    for select, xgb_name in zip(selection, xgb_names):
+                        if isinstance(select[1],str):
+                            variants = [select[1]]
+                        else:
+                            variants = select[1]
+                        if not variants:
+                            variants = []
+                        if select[0] == 'drop':
+                            column_drop = [x for x in losses_data.columns if xgb_name in x and any([y in x for y in variants])]
+                        else:
+                            column_drop = [x for x in losses_data.columns if xgb_name in x and not any([y in x for y in variants])]
+                        df = df.drop(column_drop, axis=1)
+
+
+                    spa_store[name][f'h{h}_{ts[start]}~{ts[end]}'] = compute_spa(
+                        df.iloc[start:end])
+
+                    mcs_store[name][f'h{h}_{ts[start]}~{ts[end]}'] = compute_mcs(
+                        df.iloc[start:end])
 
     else:
         for h, ar, pca, xgb in zip(h_store, ar_store, pca_store, xgb_store):
@@ -683,49 +808,89 @@ def poos_model_evaluation(fl_master, ar_store, pca_store, xgb_store, results_dir
     ws = wb[wb.sheetnames[-1]]
     print_df_to_excel(df=results_df, ws=ws)
 
-    if blocks:
-        wb.create_sheet('MCS')
-        ws = wb['MCS']
-        results_df = pd.DataFrame(mcs_store).T
-        results_df = results_df[losses_data.columns.values]
-        results_df.columns = [x.replace('_ehat^2', type) for type in ['_MCS'] for x in
-                              losses_data.columns.values if '_ehat^2' in x]
-        plotting_mcs(results_df, save_dir=f'{results_dir}/MCS.png')
-        mean = results_df.mean()
-        count10 = results_df[results_df<0.1].count()
-        results_df.loc['mean'] = mean
-        results_df.loc['<10%'] = count10
-        print_df_to_excel(df=results_df, ws=ws)
+    writer = pd.ExcelWriter(f'{results_dir}/test_summary.xlsx', engine='openpyxl')
+    writer.book = wb
 
-        wb.create_sheet('MCS_no_oracle')
-        ws = wb['MCS_no_oracle']
-        results_df = pd.DataFrame(mcs_store_no_oracle).T
-        results_df = results_df.reindex(columns=losses_data.columns.values, fill_value=-1)
-        results_df.columns = [x.replace('_ehat^2', type) for type in ['_MCS'] for x in
-                              losses_data.columns.values if '_ehat^2' in x]
-        results_df.drop('oracle_MCS', axis=1, inplace=True)
-        plotting_mcs(results_df, save_dir=f'{results_dir}/MCS_no_oracle.png')
-        plotting_mcs(results_df[['ar_MCS', 'pca_MCS', 'ssm_MCS']], save_dir=f'{results_dir}/MCS_selected.png')
-        plotting_mcs(results_df[['ssm_MCS', 'ssm_full_MCS', 'hparam_MCS', 'max_iter_MCS']],
-                     save_dir=f'{results_dir}/MCS_xgb.png')
-        mean = results_df.mean()
-        count10 = results_df[results_df<0.1].count()
-        results_df.loc['mean'] = mean
-        results_df.loc['<10%'] = count10
-        print_df_to_excel(df=results_df, ws=ws)
+    if blocks:
+        for k, v in mcs_store.items():
+            results_df = pd.DataFrame(v).T
+            plotting_mcs(results_df, save_dir=f'{results_dir}/MCS_{k}.png')
+            mean = results_df.mean()
+            count10 = results_df[results_df < 0.1].count()
+            results_df.loc['mean'] = mean
+            results_df.loc['<10%'] = count10
+
+            v = results_df
+            index = [[x.partition('_')[0], x.partition('_')[-1]] for x in v.columns]
+            v.columns = pd.MultiIndex.from_arrays(np.array(index).T.tolist())
+            v.to_excel(writer, sheet_name=f'MCS_{k}')
+
 
         for k, v in spa_store.items():
-            wb.create_sheet(f'SPA_{k}')
-            ws = wb[f'SPA_{k}']
             results_df = pd.DataFrame(v).T
             plotting_mcs(results_df, save_dir=f'{results_dir}/SPA_{k}.png')
             mean = results_df.mean()
             count10 = results_df[results_df < 0.1].count()
             results_df.loc['mean'] = mean
             results_df.loc['<10%'] = count10
-            print_df_to_excel(df=results_df, ws=ws)
 
-    wb.save(f'{results_dir}/test_summary.xlsx')
+            v = results_df
+            index = [[x.partition('_')[0], x.partition('_')[-1]] for x in v.columns]
+            v.columns = pd.MultiIndex.from_arrays(np.array(index).T.tolist())
+            v.to_excel(writer, sheet_name=f'SPA_{k}')
+
+    writer.save()
+    writer.close()
+
+
+
+
+def combine_poos_excel_results(excel_store, results_dir, name_store, selected_xgba):
+    data_store = {f'h{x}': [] for x in [1, 3, 6, 12, 24]}
+    for idx, (excel_dir, name) in enumerate(zip(excel_store, name_store)):
+        xls = pd.ExcelFile(excel_dir)
+        for (k, v) in data_store.items():
+            df = pd.read_excel(xls, k, index_col=0)
+            if idx == 0:
+                v.append(df[['start_dates', 'end_dates']])
+            df.drop(['start_dates', 'end_dates'], inplace=True, axis=1)
+            df.columns = [f'{name}_{x}' for x in df.columns]
+            v.append(df)
+
+    excel_name = create_excel_file(f'{results_dir}/combined_poos_results.xlsx')
+    wb = openpyxl.load_workbook(excel_name)
+    for k, v in data_store.items():
+        wb.create_sheet(k)
+        ws = wb[k]
+        v = pd.concat(v, axis=1)
+
+        print_df_to_excel(df=v, ws=ws)
+    wb.save(excel_name)
+    new_index = [f'{x}~{y}' for x,y in zip(v['start_dates'], v['end_dates'])]
+    book = openpyxl.load_workbook(excel_name)
+    writer = pd.ExcelWriter(excel_name, engine='openpyxl')
+    writer.book = book
+
+    for k, v in data_store.items():
+        # RMSE columns only
+        v = pd.concat(v, axis=1)
+        v = v[[x for x in v.columns if '_rmse' in x]]
+        v = v.T
+        index = [[x.partition('_')[0], x.partition('_')[-1]] for x in v.index]
+        v.index = pd.MultiIndex.from_arrays(np.array(index).T.tolist())
+        v = v.T
+        v.index = new_index
+        v.columns = pd.MultiIndex.from_tuples([(x, y.replace('_rmse', '')) for x, y in v.columns])
+        v.to_excel(writer, sheet_name=f'{k}_rmse')
+
+        # Selected xgba columns with ar, pca, rf.
+        v = v.drop([(model, variant) for model, variant in v.columns if
+                    'xgba' in model and not variant in selected_xgba], axis=1)
+        v.index = new_index
+        v.to_excel(writer, sheet_name=f'{k}_rmse_selected')
+
+    writer.save()
+    writer.close()
 
 
 class Shap_data:

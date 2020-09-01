@@ -375,8 +375,6 @@ class Xgboost(Boost):
         self.feature_names = feature_names
 
     def predict(self, exog, best_ntree_limit=None):
-        #if not best_ntree_limit:
-        #    best_ntree_limit = 0  # Use all trees
         return self.model.predict(xgb.DMatrix(exog), ntree_limit=best_ntree_limit)
 
     def return_data_dict(self):
