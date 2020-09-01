@@ -22,7 +22,7 @@ def selector(case, **kwargs):
                         y_names=fl_master.y_names)
         first_est_date = '2005:1'
         est_dates = ['2004:12']
-        model_mode = 'rf'
+        model_mode = 'xgb'
         if model_mode == 'xgb' or model_mode == 'xgb_with_hparam':
             default_hparams = {'seed': 42,
                                'booster': 'gbtree',
@@ -50,7 +50,8 @@ def selector(case, **kwargs):
                                                'colsample_bytree': {'type': 'Real', 'lower': 0.5, 'upper': 1},
                                                'm': {'type': 'Integer', 'lower': 1, 'upper': 24},
                                                # 'p': {'type': 'Integer', 'lower': 1, 'upper': 48},
-                                               'adap_gamma': {'type': 'Real', 'lower': -2, 'upper': 1.5}
+                                               'adap_gamma': {'type': 'Real', 'lower': -2, 'upper': 1.5},
+                                               #'gamma': {'type':'Real', 'lower':0, 'upper':5}
                                                },
                                  }
         elif model_mode == 'rf':
@@ -115,4 +116,4 @@ def selector(case, **kwargs):
 
 
 if __name__ == '__main__':
-    selector(case=4, excel_dir='./excel/dataset_0720/INDPRO_data_loader.xlsx', var_name='poos_IND_ar')
+    selector(case=1, excel_dir='./excel/dataset_0720/CPIAUCSL_data_loader.xlsx', var_name='poos_CPIA_xgba')
