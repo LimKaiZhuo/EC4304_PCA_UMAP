@@ -5,8 +5,7 @@ import openpyxl
 from natsort import natsorted
 import matplotlib.pyplot as plt
 import seaborn as sns
-import statsmodels.api as sm
-import collections
+from own_package.ssm import LocalLevel
 
 from own_package.features_labels import read_excel_data, read_excel_dataloader, Fl_master, Fl_cw_data_store
 from own_package.postprocess import read_excel_to_df
@@ -101,30 +100,6 @@ def cw_analysis(**kwargs):
     plt.plot(m_star_store)
     plt.savefig('{}/m_star_store.png'.format(results_dir))
     plt.close()
-
-
-class LocalLevel(sm.tsa.statespace.MLEModel):
-    _start_params = [1., 1.]
-    _param_names = ['var.level', 'var.irregular']
-
-    def __init__(self, endog):
-        super(LocalLevel, self).__init__(endog, k_states=1, initialization='diffuse')
-
-        self['design', 0, 0] = 1
-        self['transition', 0, 0] = 1
-        self['selection', 0, 0] = 1
-
-    def transform_params(self, unconstrained):
-        return unconstrained ** 2
-
-    def untransform_params(self, unconstrained):
-        return unconstrained ** 0.5
-
-    def update(self, params, **kwargs):
-        params = super(LocalLevel, self).update(params, **kwargs)
-
-        self['state_cov', 0, 0] = params[0]
-        self['obs_cov', 0, 0] = params[1]
 
 
 def single_xgb_analysis(results_dir, plot_name):

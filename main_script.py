@@ -27,15 +27,15 @@ def selector(case, excel_dir=None, var_name=None):
         fl_master.iterated_em(features=features, labels=labels, pca_p=9, max_iter=10000, tol=0.1, excel_dir=excel_dir)
     elif case == 2:
         # Testing pca k selection using IC criteria
-        excel_dir = './excel/dataset_filled.xlsx'
+        excel_dir = './excel/archive/dataset_filled.xlsx'
         features, labels, time_stamp, features_names, labels_names, label_type = read_excel_data(excel_dir=excel_dir)
         fl_master = Fl_master(x=features, yo=labels, time_stamp=time_stamp,
                               features_names=features_names, labels_names=labels_names)
         (f_tv, f_tt), (yo_tv, yo_t), (y_tv, y_tt), \
         (ts_tv, ts_tt), (tidx_tv, tidx_tt), (nobs_tv, nobs_tt) = fl_master.percentage_split(0)
-        fl = Fl_pca(val_split=0.2, x=f_tv, yo=yo_tv, y=y_tv,
-                    time_stamp=ts_tv, time_idx=tidx_tv, features_names=features_names, labels_names=labels_names)
-        r, ic_store = fl.pca_k_selection(lower_k=5, upper_k=40)
+        fl = Fl_pca(val_split=None, x=None, yo=None, y=None,
+                    time_stamp=None, time_idx=None,features_names=features_names, labels_names=labels_names)
+        r, ic_store = fl.pca_k_selection(x=f_tv, lower_k=5, upper_k=40)
         print(ic_store)
     elif case == 3:
         # Training and validation set
@@ -245,7 +245,7 @@ if __name__ == '__main__':
     # selector(0)
     # selector(1)
     t0 = time.perf_counter()
-    selector(4, excel_dir='./excel/dataset2/INDPRO_data_loader.xlsx', var_name='testset_INDxgbd_rep_holdout')
+    selector(2, excel_dir='./excel/dataset2/INDPRO_data_loader.xlsx', var_name='testset_INDxgbd_rep_holdout')
     t1 = time.perf_counter()
     print(t1-t0)
     # selector(4, excel_dir='./excel/dataset2/W875RX1_data_loader.xlsx', var_name='testset_W875xgb_hparam_opt')

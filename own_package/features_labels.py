@@ -11,6 +11,7 @@ from openpyxl.utils.dataframe import dataframe_to_rows
 import openpyxl
 import umap, shap
 import statsmodels.api as sm
+from statsmodels.multivariate.pca import PCA as SMPCA
 from sklearn.model_selection import cross_val_score
 from skopt import gp_minimize
 from skopt.space import Real, Integer
@@ -402,12 +403,15 @@ class Fl_pca(Fl_master):
         loadings = pca.components_.T * math.sqrt(self.N)
         factors = x @ loadings / self.N
         '''
-        T, N = x.shape
-        w, v = eigh(x.T @ x)
-        loadings = np.fliplr(v[:, -r:])
-        loadings = loadings * math.sqrt(N)
-        factors = x @ loadings / N
-        loadings_T = loadings.T
+        #T, N = x.shape
+        #w, v = eigh(x.T @ x)
+        #loadings = np.fliplr(v[:, -r:])
+        #loadings = loadings * math.sqrt(N)
+        #factors = x @ loadings / N
+        #loadings_T = loadings.T
+
+        pc = SMPCA(x, ncomp=r)
+
 
         '''
         w, v = eigh(x @ x.T)
@@ -415,7 +419,7 @@ class Fl_pca(Fl_master):
         loadings_T = factors.T @ x / self.nobs
         '''
 
-        return factors, loadings_T
+        return pc.factors, pc.loadings.T
 
     def umap_factor_estimation(self, x, r, x_transformed_already=False):
         if not x_transformed_already:
@@ -577,9 +581,8 @@ class Fl_pca(Fl_master):
         ols_model = ols_model.fit()
         return ols_model.aic, ols_model.bic
 
-    def pca_k_selection(self, lower_k=5, upper_k=100):
+    def pca_k_selection(self, x, lower_k=5, upper_k=100):
         ic_store = []
-        x = self.x
         x_scaler = StandardScaler()
         x_scaler.fit(x)
         x = x_scaler.transform(x)

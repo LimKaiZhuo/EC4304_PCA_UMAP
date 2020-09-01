@@ -94,3 +94,9 @@ def print_array_to_excel(array, first_cell, ws, axis=2):
         for i in range(shape[0]):
             for j in range(shape[1]):
                 ws.cell(i + first_cell[0], j + first_cell[1]).value = array[i, j]
+
+
+def create_id_dict(var_name, h, est, model, model_name, expt, seed):
+    return {'var_name': var_name, 'h':h, 'est':est, 'model':model, 'model_name': model_name, 'expt':expt, 'seed':seed,
+            'results_dir': f'./results/{expt}/poos_{var_name}_{model_name}_{est}_s{seed}',
+            'model_full_name':f'{var_name}_{model_name}_{est}_s{seed}',}
