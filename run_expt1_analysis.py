@@ -3,24 +3,25 @@ from own_package.poos import poos_analysis, poos_processed_data_analysis, poos_e
 from own_package.others import create_results_directory, create_id_dict
 from own_package.features_labels import read_excel_data, read_excel_dataloader, Fl_master, Fl_pca, Fl_ar, \
     Fl_cw, Fl_xgb, hparam_selection
+from own_package.postprocess import difference_to_levels
 
 
 def selector(case, **kwargs):
     if case == 1:
         pass
     elif case == 2:
-        excel_dir = './excel/dataset_0720/INDPRO_data_loader.xlsx'
+        excel_dir = './excel/dataset_0720/CPIA1_data_loader.xlsx'
         output = read_excel_dataloader(excel_dir=excel_dir)
         fl_master = Fl_master(x=output[0], features_names=output[1],
                               yo=output[2], labels_names=output[3],
                               y=output[4], y_names=output[5],
                               time_stamp=output[6])
         first_est_date = '2005:1'
-        id = create_id_dict(var_name='IND',
+        id = create_id_dict(var_name='CPIA1',
                             h=[1, 3, 6, 12, 24],
-                            est='rfcv',
-                            model='xgb',
-                            model_name='xgba',
+                            est='rh',
+                            model='rf',
+                            model_name='rf',
                             expt='expt1',
                             seed=42)
         h_store = [1, 3, 6, 12, 24]
@@ -31,22 +32,27 @@ def selector(case, **kwargs):
                           first_est_date=first_est_date,
                           save_dir=f'{id["results_dir"]}/poos_h{h}.pkl')
     elif case == 3:
-        id = create_id_dict(var_name='IND',
+        id = create_id_dict(var_name='CPIA1',
                             h=[1, 3, 6, 12, 24],
                             est='rh',
-                            model='rf',
-                            model_name='rf',
+                            model='xgb',
+                            model_name='xgba',
                             expt='expt1',
                             seed=42)
 
         first_est_date = '2005:1'
         est_dates = ['2004:12']
+        levels = True
+        if levels:
+            levels = '_levels'
+        else:
+            levels = ''
         poos_processed_data_analysis(
-            save_dir_store=[f'{id["results_dir"]}/poos_{id["model"]}_h1_analysis_results.pkl',
-                            f'{id["results_dir"]}/poos_{id["model"]}_h3_analysis_results.pkl',
-                            f'{id["results_dir"]}/poos_{id["model"]}_h6_analysis_results.pkl',
-                            f'{id["results_dir"]}/poos_{id["model"]}_h12_analysis_results.pkl',
-                            f'{id["results_dir"]}/poos_{id["model"]}_h24_analysis_results.pkl',
+            save_dir_store=[f'{id["results_dir"]}/poos_{id["model"]}_h1_analysis_results{levels}.pkl',
+                            f'{id["results_dir"]}/poos_{id["model"]}_h3_analysis_results{levels}.pkl',
+                            f'{id["results_dir"]}/poos_{id["model"]}_h6_analysis_results{levels}.pkl',
+                            f'{id["results_dir"]}/poos_{id["model"]}_h12_analysis_results{levels}.pkl',
+                            f'{id["results_dir"]}/poos_{id["model"]}_h24_analysis_results{levels}.pkl',
                             ],
             h_store=['1',
                      '3',
@@ -55,7 +61,7 @@ def selector(case, **kwargs):
                      '24',
                      ],
             results_dir=id['results_dir'],
-            model_full_name=id['model_full_name'], model=id['model'],
+            model_full_name=id['model_full_name'] + levels, model=id['model'],
             nber_excel_dir='./excel/NBER_062020.xlsx',
             est_dates=est_dates, first_est_date=first_est_date,
             combinations=[['rw', 'll*ln'],
@@ -69,43 +75,49 @@ def selector(case, **kwargs):
         for h, h_idx in zip(h_store, h_idx_store):
             poos_xgb_plotting_m(h=h, results_dir=results_dir, ssm_modes=['ll', 'll*ln'])
     elif case == 3.3:
-        # Combine rmse excel together into 1 excel file
-        var_name = 'IND'
-        id1 = create_id_dict(var_name=var_name,
-                             h=[1, 3, 6, 12, 24],
-                             est='rh',
-                             model='xgb',
-                             model_name='xgba',
-                             expt='expt1',
-                             seed=42)
-        id2 = create_id_dict(var_name=var_name,
-                             h=[1, 3, 6, 12, 24],
-                             est='rfcv',
-                             model='xgb',
-                             model_name='xgba',
-                             expt='expt1',
-                             seed=42)
-        id3 = create_id_dict(var_name=var_name,
-                             h=[1, 3, 6, 12, 24],
-                             est='rh',
-                             model='rf',
-                             model_name='rf',
-                             expt='expt1',
-                             seed=42)
-        id4 = create_id_dict(var_name=var_name,
-                             h=[1, 3, 6, 12, 24],
-                             est='rfcv',
-                             model='rf',
-                             model_name='rf',
-                             expt='expt1',
-                             seed=42)
-        id_store = [id1, id2, id3, id4]
-        excel_store = ['./results/expt1/poos_IND_ar/poos_analysis_ar.xlsx',
-                       './results/expt1/poos_IND_pca/poos_analysis_pca.xlsx', ] + \
-                      [f'{x["results_dir"]}/poos_analysis_{x["model_full_name"]}.xlsx' for x in id_store]
-        name_store = ['ar', 'pca'] + [f'{x["model_name"]}({x["est"]})' for x in id_store]
-        combine_poos_excel_results(excel_store=excel_store, results_dir='./results/expt1', name_store=name_store,
-                                   selected_xgba=['oracle', 'hparam','rw', 'll*ln', 'rw+ll*ln'])
+        rawdata_excel = './excel/2020-07.xlsx'
+        id = create_id_dict(var_name='CPIA',
+                            h=[1, 3, 6, 12, 24],
+                            est='rh',
+                            model='xgb',
+                            model_name='xgba',
+                            expt='expt1',
+                            seed=42)
+
+        first_est_date = '2005:1'
+        est_dates = ['2004:12']
+        difference_to_levels(varname='CPIAUCSL',
+                             save_dir_store=[f'{id["results_dir"]}/poos_{id["model"]}_h1_analysis_results.pkl',
+                                             f'{id["results_dir"]}/poos_{id["model"]}_h3_analysis_results.pkl',
+                                             f'{id["results_dir"]}/poos_{id["model"]}_h6_analysis_results.pkl',
+                                             f'{id["results_dir"]}/poos_{id["model"]}_h12_analysis_results.pkl',
+                                             f'{id["results_dir"]}/poos_{id["model"]}_h24_analysis_results.pkl',
+                                             ],
+                             h_store=['1', '3', '6', '12', '24', ],
+                             rawdata_excel=rawdata_excel, first_est_date=first_est_date)
+
+        levels = '_levels'
+        poos_processed_data_analysis(
+            save_dir_store=[f'{id["results_dir"]}/poos_{id["model"]}_h1_analysis_results{levels}.pkl',
+                            f'{id["results_dir"]}/poos_{id["model"]}_h3_analysis_results{levels}.pkl',
+                            f'{id["results_dir"]}/poos_{id["model"]}_h6_analysis_results{levels}.pkl',
+                            f'{id["results_dir"]}/poos_{id["model"]}_h12_analysis_results{levels}.pkl',
+                            f'{id["results_dir"]}/poos_{id["model"]}_h24_analysis_results{levels}.pkl',
+                            ],
+            h_store=['1',
+                     '3',
+                     '6',
+                     '12',
+                     '24',
+                     ],
+            results_dir=id['results_dir'],
+            model_full_name=id['model_full_name'] + levels, model=id['model'],
+            nber_excel_dir='./excel/NBER_062020.xlsx',
+            est_dates=est_dates, first_est_date=first_est_date,
+            combinations=[['rw', 'll*ln'],
+                          ['rw', 'llt*ln'],
+                          ['rw', 'll*ln', 'llt*ln'], ])
+
     elif case == 4:
         # Run poos experiment for ar4 or pca
         var_name = kwargs['var_name']
@@ -154,7 +166,7 @@ def selector(case, **kwargs):
                      '12',
                      '24',
                      ],
-            results_dir=results_dir,  model_full_name=model_mode, model=model_mode,
+            results_dir=results_dir, model_full_name=model_mode, model=model_mode,
             nber_excel_dir='./excel/NBER_062020.xlsx',
             est_dates=est_dates, first_est_date=first_est_date)
 
@@ -193,7 +205,7 @@ def selector(case, **kwargs):
                      '12',
                      '24',
                      ],
-            results_dir=results_dir,  model_full_name=model_mode, model=model_mode,
+            results_dir=results_dir, model_full_name=model_mode, model=model_mode,
             nber_excel_dir='./excel/NBER_062020.xlsx',
             est_dates=est_dates, first_est_date=first_est_date)
     elif case == 5:
@@ -240,7 +252,76 @@ def selector(case, **kwargs):
                                                 ['rw', 'llt*ln'],
                                                 ['rw', 'll*ln', 'llt*ln'], ]
                                   )
+    elif case == 6:
+        # Combine rmse excel together into 1 excel file
+        var_name = 'CPIA1'
+        id1 = create_id_dict(var_name=var_name,
+                             h=[1, 3, 6, 12, 24],
+                             est='rh',
+                             model='xgb',
+                             model_name='xgba',
+                             expt='expt1',
+                             seed=42)
+        id2 = create_id_dict(var_name=var_name,
+                             h=[1, 3, 6, 12, 24],
+                             est='rfcv',
+                             model='xgb',
+                             model_name='xgba',
+                             expt='expt1',
+                             seed=42)
+        id3 = create_id_dict(var_name=var_name,
+                             h=[1, 3, 6, 12, 24],
+                             est='rh',
+                             model='rf',
+                             model_name='rf',
+                             expt='expt1',
+                             seed=42)
+        id4 = create_id_dict(var_name=var_name,
+                             h=[1, 3, 6, 12, 24],
+                             est='rfcv',
+                             model='rf',
+                             model_name='rf',
+                             expt='expt1',
+                             seed=42)
+        id_store = [id1, id2, id3, ]  # id4]
+        levels = True
+
+        if levels:
+            levels = '_levels'
+        else:
+            levels = ''
+        excel_store = [f'./results/expt1/poos_{var_name}_ar/poos_analysis_ar{levels}.xlsx',
+                       f'./results/expt1/poos_{var_name}_pca/poos_analysis_pca{levels}.xlsx', ] + \
+                      [f'{x["results_dir"]}/poos_analysis_{x["model_full_name"]}{levels}.xlsx' for x in id_store]
+        name_store = ['ar', 'pca'] + [f'{x["model_name"]}({x["est"]})' for x in id_store]
+        combine_poos_excel_results(excel_store=excel_store, results_dir='./results/expt1', name_store=name_store,
+                                   selected_xgba=['oracle', 'hparam', 'rw', 'll*ln', 'rw+ll*ln'])
+    elif case == 6.1:
+        var_name = 'CPIA1'
+        est = [None, None, 'rh', 'rh', 'rfcv', 'rfcv']
+        model = ['ar', 'pca', 'xgb', 'xgb', 'rf', 'rf']
+        model_name = ['ar', 'pca', 'xgba', 'xgba', 'rf', 'rf']
+        levels = True
+
+        if levels:
+            levels = '_levels'
+        else:
+            levels = ''
+        id_store = [create_id_dict(var_name=var_name,
+                                   h=[1, 3, 6, 12, 24],
+                                   est=e,
+                                   model=m,
+                                   model_name=mn,
+                                   expt='expt1',
+                                   seed=42) for e, m, mn in zip(est, model, model_name)]
+        save_dir_store = [[f'{id["results_dir"]}/poos_{id["model"]}_h1_analysis_results{levels}.pkl',
+                           f'{id["results_dir"]}/poos_{id["model"]}_h3_analysis_results{levels}.pkl',
+                           f'{id["results_dir"]}/poos_{id["model"]}_h6_analysis_results{levels}.pkl',
+                           f'{id["results_dir"]}/poos_{id["model"]}_h12_analysis_results{levels}.pkl',
+                           f'{id["results_dir"]}/poos_{id["model"]}_h24_analysis_results{levels}.pkl',
+                           ] for id in id_store]
+        save_dir_store = [list(x) for x in zip(*save_dir_store)]
 
 
 if __name__ == '__main__':
-    selector(case=4, excel_dir='./excel/dataset_0720/INDPRO_data_loader.xlsx', var_name='poos_IND_ar')
+    selector(case=3.3, excel_dir='./excel/dataset_0720/CPIA1_data_loader.xlsx', var_name='poos_CPIA1_ar')

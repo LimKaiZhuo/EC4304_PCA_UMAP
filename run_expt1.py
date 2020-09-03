@@ -10,6 +10,7 @@ def selector(case, **kwargs):
         # Run poos experiment
         var_name = kwargs['var_name']
         excel_dir = kwargs['excel_dir']
+        seed = kwargs['seed']
         results_dir = create_results_directory('./results/expt1/{}'.format(var_name))
         output = read_excel_dataloader(excel_dir=excel_dir)
         fl_master = Fl_master(x=output[0], features_names=output[1],
@@ -24,7 +25,7 @@ def selector(case, **kwargs):
         est_dates = ['2004:12']
         model_mode = 'xgb'
         if model_mode == 'xgb' or model_mode == 'xgb_with_hparam':
-            default_hparams = {'seed': 42,
+            default_hparams = {'seed': seed,
                                'booster': 'gbtree',
                                'learning_rate': 0.1,
                                'objective': 'reg:squarederror',
@@ -55,7 +56,7 @@ def selector(case, **kwargs):
                                                },
                                  }
         elif model_mode == 'rf':
-            default_hparams = {'seed': 42,
+            default_hparams = {'seed': seed,
                                'booster': 'gbtree',
                                'learning_rate': 1,
                                'objective': 'reg:squarederror',
@@ -116,4 +117,4 @@ def selector(case, **kwargs):
 
 
 if __name__ == '__main__':
-    selector(case=1, excel_dir='./excel/dataset_0720/CPIAUCSL_data_loader.xlsx', var_name='poos_CPIA_xgba')
+    selector(case=1, excel_dir='./excel/dataset_0720/CPIA1_data_loader.xlsx', var_name='poos_CPIA1_xgba', seed=42)

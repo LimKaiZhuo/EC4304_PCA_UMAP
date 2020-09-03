@@ -2,11 +2,46 @@ import numpy as np
 import pandas as pd
 import math, random
 import cvxpy as cp
-import openpyxl
-import statsmodels.api as sm
+import openpyxl, pickle, collections
 from openpyxl.utils.dataframe import dataframe_to_rows
 from own_package.dm_test import dm_test
 from own_package.others import create_excel_file
+from own_package.features_labels import read_excel_dataloader, Fl_master
+
+
+def difference_to_levels(save_dir_store, h_store, rawdata_excel, first_est_date, varname):
+    df_master = pd.read_excel(rawdata_excel, sheet_name='Master')
+    transformation_type = df_master[varname].iloc[0]
+    df_master.drop([0], inplace=True)
+    df_master.index = [f'{x}:{y}' for x, y in
+                           zip(pd.DatetimeIndex(df_master['sasdate']).year, pd.DatetimeIndex(df_master['sasdate']).day)]
+
+    for save_dir,h_idx, h in zip(save_dir_store,range(len(save_dir_store)), h_store):
+        with open(save_dir, 'rb') as handle:
+            data_store = pickle.load(handle)
+        data_df = data_store['data_df']
+        df = data_df[[x for x in data_df.columns if '_ehat' in x]].copy()
+        df = data_df[[x for x in data_df.columns if 'y_' in x]].values - df
+        df = pd.concat((df_master[[varname]], df), axis=1)
+        start_idx = np.where(df.index==first_est_date)[0][0]
+        if transformation_type == 5:
+            levelhat = df[[varname]].iloc[start_idx-int(h):-int(h)].values*np.exp(int(h)/1200*df[[x for x in data_df.columns if '_ehat' in x]].iloc[start_idx:])
+        elif transformation_type == 6:
+            xt = df[[varname]].iloc[start_idx-int(h):-int(h)].values
+            xt_1 = df[[varname]].iloc[start_idx-int(h)-1:-int(h)-1].values
+            levelhat = xt ** (int(h)+1) / (xt_1 ** int(h)) * np.exp(int(h)/1200*df[[x for x in data_df.columns if '_ehat' in x]].iloc[start_idx:])
+        else:
+            raise TypeError(f'Invalid transformation type: {transformation_type}')
+        data_df[f'y_{h}'] = df_master[[varname]].iloc[start_idx:]
+        data_df[[x for x in data_df.columns if '_ehat' in x]] = df_master[[varname]].iloc[start_idx:].values - levelhat
+        data_store['data_df'] = data_df
+        with open(save_dir.partition('.pkl')[0] + '_levels.pkl', 'wb') as handle:
+            pickle.dump(data_store, handle)
+
+
+def plot_forecasts(save_dir_store, results_dir):
+    pass
+
 
 def read_excel_to_df(excel_dir):
     xls = pd.ExcelFile(excel_dir)
