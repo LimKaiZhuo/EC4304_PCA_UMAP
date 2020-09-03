@@ -4,8 +4,8 @@ from own_package.pre_processing import create_data_loader_excel, type_transforma
 
 def selector(case, **kwargs):
     if case == 0:
-        excel_dir = './excel/2020-07.xlsx'
-        type_transformations(excel_dir=excel_dir, results_dir='./excel/dataset_0720',
+        excel_dir = './excel/2020-07_I1.xlsx'
+        type_transformations(excel_dir=excel_dir, results_dir='./excel/dataset_0720_I1',
                              y_selection=['W875RX1', 'DPCERA3M086SBEA', 'CMRMTSPLx', 'INDPRO',
                                           'PAYEMS', 'WPSFD49207', 'CPIAUCSL', 'CPIULFSL'],
                              h_steps=[1, 3, 6, 12, 24])
