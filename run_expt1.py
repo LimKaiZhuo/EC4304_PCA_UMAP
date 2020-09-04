@@ -108,13 +108,19 @@ def selector(case, **kwargs):
                        default_hparams=default_hparams, hparam_opt_params=hparam_opt_params,
                        hparam_save_dir=hparam_save_dir
                        )
-        # poos_experiment(fl_master=fl_master, fl=fl_xgb, est_dates=est_dates, z_type=1, h=24, h_idx=4,
-        #                m_max=12, p_max=24, model_mode=model_mode, save_dir=results_dir,first_est_date=first_est_date,
-        #                default_hparams=default_hparams, hparam_opt_params=hparam_opt_params,
-        #                hparam_save_dir=hparam_save_dir
-        #                )
+        poos_experiment(fl_master=fl_master, fl=fl_xgb, est_dates=est_dates, z_type=1, h=24, h_idx=4,
+                       m_max=12, p_max=24, model_mode=model_mode, save_dir=results_dir,first_est_date=first_est_date,
+                       default_hparams=default_hparams, hparam_opt_params=hparam_opt_params,
+                       hparam_save_dir=hparam_save_dir
+                       )
 
 
 
 if __name__ == '__main__':
-    selector(case=1, excel_dir='./excel/dataset_0720/CPIA1_data_loader.xlsx', var_name='poos_CPIA1_xgba', seed=42)
+    selector(case=1, excel_dir='./excel/dataset_0720/CPIAUCSL_data_loader.xlsx', var_name='poos_CPIA_xgba_rh_s100', seed=100)
+    selector(case=1, excel_dir='./excel/dataset_0720/CPIAUCSL_data_loader.xlsx', var_name='poos_CPIA_xgba_rh_s200', seed=200)
+    selector(case=1, excel_dir='./excel/dataset_0720/CPIAUCSL_data_loader.xlsx', var_name='poos_CPIA_xgba_rh_s300', seed=300)
+
+    selector(case=1, excel_dir='./excel/dataset_0720/CPIA1_data_loader.xlsx', var_name='poos_CPIA1_xgba_rh_s100', seed=100)
+    selector(case=1, excel_dir='./excel/dataset_0720/CPIA1_data_loader.xlsx', var_name='poos_CPIA1_xgba_rh_s200', seed=200)
+    selector(case=1, excel_dir='./excel/dataset_0720/CPIA1_data_loader.xlsx', var_name='poos_CPIA1_xgba_rh_s300', seed=300)

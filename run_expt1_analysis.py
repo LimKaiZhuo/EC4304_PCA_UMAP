@@ -3,7 +3,7 @@ from own_package.poos import poos_analysis, poos_processed_data_analysis, poos_e
 from own_package.others import create_results_directory, create_id_dict
 from own_package.features_labels import read_excel_data, read_excel_dataloader, Fl_master, Fl_pca, Fl_ar, \
     Fl_cw, Fl_xgb, hparam_selection
-from own_package.postprocess import difference_to_levels
+from own_package.postprocess import difference_to_levels, plot_forecasts
 
 
 def selector(case, **kwargs):
@@ -297,8 +297,8 @@ def selector(case, **kwargs):
         combine_poos_excel_results(excel_store=excel_store, results_dir='./results/expt1', name_store=name_store,
                                    selected_xgba=['oracle', 'hparam', 'rw', 'll*ln', 'rw+ll*ln'])
     elif case == 6.1:
-        var_name = 'CPIA1'
-        est = [None, None, 'rh', 'rh', 'rfcv', 'rfcv']
+        var_name = 'CPIA'
+        est = [None, None, 'rh', 'rfcv', 'rh', 'rfcv']
         model = ['ar', 'pca', 'xgb', 'xgb', 'rf', 'rf']
         model_name = ['ar', 'pca', 'xgba', 'xgba', 'rf', 'rf']
         levels = True
@@ -321,7 +321,9 @@ def selector(case, **kwargs):
                            f'{id["results_dir"]}/poos_{id["model"]}_h24_analysis_results{levels}.pkl',
                            ] for id in id_store]
         save_dir_store = [list(x) for x in zip(*save_dir_store)]
+        plot_forecasts(save_dir_store=save_dir_store, results_dir=f'./results/expt1/forecast_plots_{var_name}', model_names=model_name, est_store=est,
+                       h_store = id_store[0]['h'])
 
 
 if __name__ == '__main__':
-    selector(case=3.3, excel_dir='./excel/dataset_0720/CPIA1_data_loader.xlsx', var_name='poos_CPIA1_ar')
+    selector(case=6.1, excel_dir='./excel/dataset_0720/CPIA1_data_loader.xlsx', var_name='poos_CPIA1_ar')

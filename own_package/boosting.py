@@ -381,11 +381,16 @@ class Xgboost(Boost):
         if self.feature_names:
             self.model.feature_names = self.feature_names
             self.feature_score = self.model.get_score(importance_type='gain')
-            model = self.model.save_raw()[4:]
-            def myfun(self=None):
-                return model
-            self.model.save_raw = myfun
-            explainer = shap.TreeExplainer(self.model)
+            try:
+                # For google colab
+                explainer = shap.TreeExplainer(self.model)
+            except UnicodeDecodeError:
+                # For ASUS
+                model = self.model.save_raw()[4:]
+                def myfun(self=None):
+                    return model
+                self.model.save_raw = myfun
+                explainer = shap.TreeExplainer(self.model)
             shap_values = csr_matrix(explainer.shap_values(self.z_matrix))
             return {'feature_score': self.feature_score,
                     'progress': self.progress,
