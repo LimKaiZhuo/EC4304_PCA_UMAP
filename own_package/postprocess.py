@@ -3,10 +3,10 @@ import pandas as pd
 import math, random
 import cvxpy as cp
 import openpyxl, pickle, collections
+import matplotlib.pyplot as plt
 from openpyxl.utils.dataframe import dataframe_to_rows
 from own_package.dm_test import dm_test
-from own_package.others import create_excel_file
-from own_package.features_labels import read_excel_dataloader, Fl_master
+from own_package.others import create_excel_file, create_results_directory
 
 
 def difference_to_levels(save_dir_store, h_store, rawdata_excel, first_est_date, varname):
@@ -39,7 +39,36 @@ def difference_to_levels(save_dir_store, h_store, rawdata_excel, first_est_date,
             pickle.dump(data_store, handle)
 
 
-def plot_forecasts(save_dir_store, results_dir):
+def plot_forecasts(save_dir_store, results_dir, model_names, est_store, h_store):
+    results_dir = create_results_directory(results_dir)
+    for h, sds in zip(h_store, save_dir_store):
+        for idx, (model_name, est, save_dir) in enumerate(zip(model_names, est_store, sds)):
+            with open(save_dir, 'rb') as handle:
+                data_df = pickle.load(handle)['data_df']
+
+            if idx == 0:
+                df = data_df[[f'y_{h}']]
+
+            if model_name in ['ar', 'pca']:
+                df = pd.concat((df, data_df[[f'{model_name}_ehat']]), axis=1)
+            elif model_name == 'xgba':
+                df = pd.concat((df, data_df[[f'rw_ehat']].rename(columns={'rw_ehat':f'xgba_rw_{est}_ehat'}, inplace=False)), axis=1)
+            elif model_name == 'rf':
+                df = pd.concat((df, data_df[[f'rf_ehat']].rename(columns={'rf_ehat':f'rf_{est}_ehat'}, inplace=False)), axis=1)
+
+
+        ax = df[[x for x in df.columns if '_ehat' in x]].plot(lw=0.5)
+        ax.ylabel = 'ehat'
+        plt.savefig(f'{results_dir}/{h}_ehat_all.png')
+        plt.close()
+
+        ax = df[[x for x in df.columns if any([y in x for y in ['ar', 'pca', 'rw_rh']])]].plot(lw=0.5)
+        ax.ylabel = 'ehat'
+        plt.savefig(f'{results_dir}/{h}_ehat_arpcaxgbarwrh.png')
+        plt.close()
+
+
+
     pass
 
 
