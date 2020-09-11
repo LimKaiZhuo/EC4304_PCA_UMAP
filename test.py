@@ -251,7 +251,7 @@ def selector(case, **kwargs):
                                   blocked_dates=dates,
                                   first_est_date=first_est_date,
                                   blocks=True)
-    elif case == 6:
+    elif case == 7:
         h_store = [1, 3, 6, 12, 24]
         var_name = kwargs['var_name']
         excel_dir = kwargs['excel_dir']

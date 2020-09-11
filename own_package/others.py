@@ -4,6 +4,7 @@ from openpyxl.utils.dataframe import dataframe_to_rows
 
 import os
 
+
 def create_results_directory(results_directory, folders=None, excels=None):
     if os.path.exists(results_directory):
         expand = 1
@@ -96,13 +97,30 @@ def print_array_to_excel(array, first_cell, ws, axis=2):
                 ws.cell(i + first_cell[0], j + first_cell[1]).value = array[i, j]
 
 
-def create_id_dict(var_name, h, model, model_name, expt, seed, est=None, **kwargs):
+def create_id_dict(var_name, h, expt, est, model=None, model_name=None, seed=None,  combined_name=False, **kwargs):
+    if combined_name:
+       return {'var_name': var_name, 'model_full_name':f'{var_name}_{combined_name}','model': combined_name,
+               'model_name': combined_name, 'est':est, 'seed':seed,
+               'results_dir':f'./results/{expt}/model_combination_{var_name}_{combined_name}'}
+
     if not est:
         results_dir = f'./results/{expt}/poos_{var_name}_{model_name}'
         model_full_name = f'{var_name}_{model_name}'
     else:
         results_dir = f'./results/{expt}/poos_{var_name}_{model_name}_{est}_s{seed}'
         model_full_name = f'{var_name}_{model_name}_{est}_s{seed}'
-    return {**{'var_name': var_name, 'h':h, 'est':est, 'model':model, 'model_name': model_name, 'expt':expt, 'seed':seed,
-            'results_dir': results_dir,
-            'model_full_name':model_full_name,},**kwargs}
+    return {'var_name': var_name, 'h': h, 'est': est, 'model': model, 'model_name': model_name, 'expt': expt,
+               'seed': seed,
+               'results_dir': results_dir,
+               'model_full_name': model_full_name,}
+
+
+def create_id_store(var_name,expt_type, est,  model, model_name,  seed):
+    return [create_id_dict(var_name=var_name,
+                           h=[1, 3, 6, 12, 24],
+                           est=e,
+                           model=m,
+                           model_name=mn,
+                           expt=expt_type,
+                           seed=s)
+            for e, m, mn, s in zip(est, model, model_name, seed)]

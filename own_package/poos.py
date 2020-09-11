@@ -4,6 +4,7 @@ import pandas as pd
 import statsmodels.api as sm
 import openpyxl
 import matplotlib.pyplot as plt
+import seaborn as sns
 from arch.bootstrap import MCS, SPA
 from own_package.boosting import Xgboost
 from own_package.ssm import LocalLevel, SSMBase
@@ -346,7 +347,8 @@ def poos_analysis(fl_master, h, h_idx, model_mode, est_mode, results_dir, save_d
     elif model_mode == 'rf':
         df = pd.DataFrame.from_dict({'time_stamp': ts,
                                      f'y_{h}': y,
-                                     'rf_ehat': [step['progress']['h_step_ahead']['ehat'][0] for block in data_store for step in
+                                     'rf_ehat': [step['progress']['h_step_ahead']['ehat'][0] for block in data_store for
+                                                 step in
                                                  block['poos_data_store']], }).set_index('time_stamp')
         hparam_df = data_store[0]['hparams_df'].iloc[[0], :]
 
@@ -375,6 +377,15 @@ def poos_analysis_combining_xgb(h, results_dir, poos_post_dir_store):
 
 
 def poos_xgb_plotting_m(h, results_dir, ssm_modes):
+    import matplotlib as mpl
+    try:
+        del mpl.font_manager.weight_dict['roman']
+        mpl.font_manager._rebuild()
+    except KeyError:
+        pass
+    sns.set(style='ticks')
+    mpl.rc('font', family='Times New Roman')
+
     with open(f'{results_dir}/poos_xgb_h{h}_analysis_results.pkl', 'rb') as handle:
         data = pickle.load(handle)
 
@@ -402,7 +413,7 @@ def poos_xgb_plotting_m(h, results_dir, ssm_modes):
 
     # Plot ntree vs time
     df = data['data_df']
-    plots(df, ['ll', 'll*ln', 'll_full'], plot_name='ll')
+    plots(df, ['ll', 'll*ln'], plot_name='ll')
     plots(df, ['llt', 'llt*ln'], plot_name='llt')
     plots(df, ['lls', 'lls*ln'], plot_name='lls')
     plots(df, ['llc', 'llc*ln'], plot_name='llc')
@@ -430,17 +441,18 @@ def poos_xgb_plotting_m(h, results_dir, ssm_modes):
         y_store = ['1970:1', '1983:1', '2007:1', '2020:3']
         ehat_df.plot(kind='line', y=y_store, ax=ax, lw=0.5)
     except KeyError:
-        y_store = ['2005:1', '2010:1', '2010:2']
-        ehat_df.plot(kind='line', y=y_store, ax=ax, lw=0.5)
+        y_store = ['2005:1', '2005:2', '2010:1', '2010:2']
+        ehat_df.plot(kind='line', y=y_store, ax=ax, lw=0.7)
 
     ax.set_ylabel('|ehat|')
     ax.set_xlabel('ntrees')
+    ax.set_xlim([0,300])
     ax.legend(loc='right')
     for y in y_store:
         ax.scatter(df.loc[y][f'{ssm_modes[0]}_ntree'], ehat_df[y].iloc[int(df.loc[y][f'{ssm_modes[0]}_ntree'])],
                    marker='x', s=70)
     fig.tight_layout()
-    fig.savefig(f'{results_dir}/{ssm_modes[0]}ehat_vs_ntrees_h{h}.png', transparent=False, dpi=300, bbox_inches="tight")
+    fig.savefig(f'{results_dir}/{ssm_modes[0].replace("*", "_")}ehat_vs_ntrees_h{h}.png', transparent=False, dpi=300, bbox_inches="tight")
 
 
 def poos_processed_data_analysis(results_dir, save_dir_store, h_store, model_full_name, nber_excel_dir, first_est_date,
@@ -523,7 +535,11 @@ def poos_processed_data_analysis(results_dir, save_dir_store, h_store, model_ful
                     rmse_store.append((ehat_df.iloc[start:, :] ** 2).mean(axis=0) ** 0.5)
 
         # Combining data into dataframe
-        df = pd.concat((pd.concat(rmse_store, axis=1).T, data_store['hparam_df'].reset_index()), axis=1)
+        try:
+            df = pd.concat((pd.concat(rmse_store, axis=1).T, data_store['hparam_df'].reset_index()), axis=1)
+        except KeyError:
+            df = pd.concat(rmse_store, axis=1).T
+
         if not skip:
             df['start_dates'] = [f'{x}:1' for x in range(1970, 2020, 5)] + start_store + ['Expansionary',
                                                                                           'Recessionary']
@@ -673,12 +689,21 @@ def poos_model_evaluation(fl_master, ar_store, pca_store, xgb_stores, results_di
 
     h_store = 1, 3, 6, 12, 24
     results_store = {}
-    selected_store = [[('drop',None),('drop',None),('drop',None),('drop',None),],
-                      [('drop','oracle'),('drop','oracle'),('drop','oracle'),('drop','oracle'),],
-                      [('drop','oracle'),('keep',None),('keep',None),('keep',None),],
-                      [('keep',['_rw_','_ll*ln_','_rw+ll*ln_',]),('keep',None),('keep',None),('keep',None),],
-                      [('keep','_rw_'),('keep',None),('keep',None),('keep',None),],]
-    name_store = ['all', 'all-oracle', 'xgbarh-oracle', 'xgbarh(selected)', 'xgbarh(rw)']
+    # selected_store = [[('drop',None),('drop',None),('drop',None),('drop',None),],
+    #                  [('drop','oracle'),('drop','oracle'),('drop','oracle'),('drop','oracle'),],
+    #                  [('drop','oracle'),('keep',None),('keep',None),('keep',None),],
+    #                  [('keep',['_rw_','_ll*ln_','_rw+ll*ln_',]),('keep',None),('keep',None),('keep',None),],
+    #                  [('keep','_rw_'),('keep',None),('keep',None),('keep',None),],]
+    # name_store = ['all', 'all-oracle', 'xgbarh-oracle', 'xgbarh(selected)', 'xgbarh(rw)']
+    selected_store = [
+        [('keep', ['_rw_', '_hparam_', '_ll_e', '_ll*ln_', '_rw+ll*ln_', ]),
+         ('keep',  ['_rw_', '_hparam_', '_ll_e', '_ll*ln_', '_rw+ll*ln_', ]), ('drop', None), ('drop', None), ],
+        #[('drop', None), ('drop', None), ('drop', None), ('drop', None), ],
+        #[('drop', 'oracle'), ('drop', 'oracle'), ('drop', 'oracle'), ('drop', 'oracle'), ],
+        #[('drop', 'oracle'), ('keep', None), ('keep', None), ('keep', None), ],
+        #[('keep', '_rw_'), ('keep', None), ('keep', None), ('keep', None), ],
+    ]
+    name_store = ['xgba(selected)']# 'all', 'all-oracle', 'xgbarh-oracle',  'xgbarh(rw)']
     xgb_names = ['xgba(rh)', 'xgba(rfcv)', 'rf(rh)', 'rf(rfcv)']
     mcs_store = collections.defaultdict(dict)
     spa_store = collections.defaultdict(dict)
@@ -712,11 +737,11 @@ def poos_model_evaluation(fl_master, ar_store, pca_store, xgb_stores, results_di
                         xgb_ehatdf = get_keyword_df_from_data(xgb_data, '_ehat', column_header=name)
                 xgb_ehatdf_store.append(xgb_ehatdf)
 
-            model_data = pd.concat([pca_ehatdf]+xgb_ehatdf_store, axis=1)
+            model_data = pd.concat([pca_ehatdf] + xgb_ehatdf_store, axis=1)
             d_vectors = (ar_ehatdf['ar_ar_ehat'].values ** 2)[..., None] - \
                         model_data.values ** 2
 
-            losses_data = pd.concat([ar_ehatdf, pca_ehatdf]+ xgb_ehatdf_store, axis=1)** 2
+            losses_data = pd.concat([ar_ehatdf, pca_ehatdf] + xgb_ehatdf_store, axis=1) ** 2
             losses_data.columns = [f'{x}^2' for x in losses_data.columns]
 
             for start, end in zip(est_dates_idx[:-1], est_dates_idx[1:]):
@@ -726,26 +751,27 @@ def poos_model_evaluation(fl_master, ar_store, pca_store, xgb_stores, results_di
                 #                                  axis=0, arr=d_vectors[start:end])
                 results_store[f'h{h}_{ts[start]}~{ts[end]}'] = np.concatenate((p_values, p_values))
 
-                #series = compute_mcs(e2_df=losses_data.iloc[start:end].copy(), drop_cols=None)
-                #series_no_oracle = compute_mcs(e2_df=losses_data.iloc[start:end].copy(), drop_cols=['oracle_ehat^2'])
-                #mcs_store[f'h{h}_{ts[start]}~{ts[end]}'] = series
-                #mcs_store_no_oracle[f'h{h}_{ts[start]}~{ts[end]}'] = series_no_oracle
+                # series = compute_mcs(e2_df=losses_data.iloc[start:end].copy(), drop_cols=None)
+                # series_no_oracle = compute_mcs(e2_df=losses_data.iloc[start:end].copy(), drop_cols=['oracle_ehat^2'])
+                # mcs_store[f'h{h}_{ts[start]}~{ts[end]}'] = series
+                # mcs_store_no_oracle[f'h{h}_{ts[start]}~{ts[end]}'] = series_no_oracle
 
                 for name, selection in zip(name_store, selected_store):
                     df = losses_data.copy()
                     for select, xgb_name in zip(selection, xgb_names):
-                        if isinstance(select[1],str):
+                        if isinstance(select[1], str):
                             variants = [select[1]]
                         else:
                             variants = select[1]
                         if not variants:
                             variants = []
                         if select[0] == 'drop':
-                            column_drop = [x for x in losses_data.columns if xgb_name in x and any([y in x for y in variants])]
+                            column_drop = [x for x in losses_data.columns if
+                                           xgb_name in x and any([y in x for y in variants])]
                         else:
-                            column_drop = [x for x in losses_data.columns if xgb_name in x and not any([y in x for y in variants])]
+                            column_drop = [x for x in losses_data.columns if
+                                           xgb_name in x and not any([y in x for y in variants])]
                         df = df.drop(column_drop, axis=1)
-
 
                     spa_store[name][f'h{h}_{ts[start]}~{ts[end]}'] = compute_spa(
                         df.iloc[start:end])
@@ -812,37 +838,42 @@ def poos_model_evaluation(fl_master, ar_store, pca_store, xgb_stores, results_di
     writer.book = wb
 
     if blocks:
-        for k, v in mcs_store.items():
-            results_df = pd.DataFrame(v).T
-            plotting_mcs(results_df, save_dir=f'{results_dir}/MCS_{k}.png')
-            mean = results_df.mean()
-            count10 = results_df[results_df < 0.1].count()
-            results_df.loc['mean'] = mean
-            results_df.loc['<10%'] = count10
+        for (k1, v1), (k2, v2) in zip(mcs_store.items(), spa_store.items()):
+            results_df1 = pd.DataFrame(v1).T
+            plotting_mcs(results_df1, save_dir=f'{results_dir}/MCS_{k1}.png')
+            mean = results_df1.mean()
+            count10 = results_df1[results_df1 < 0.1].count().astype(str)
+            results_df1=results_df1.round(2).astype(str)
+            results_df1.loc['mean'] = mean.round(2).astype(str)
+            results_df1.loc['<10%'] = count10
 
-            v = results_df
-            index = [[x.partition('_')[0], x.partition('_')[-1]] for x in v.columns]
-            v.columns = pd.MultiIndex.from_arrays(np.array(index).T.tolist())
-            v.to_excel(writer, sheet_name=f'MCS_{k}')
+            v1 = results_df1
+            index = [[x.partition('_')[0], x.partition('_')[-1]] for x in v1.columns]
+            v1.columns = pd.MultiIndex.from_arrays(np.array(index).T.tolist())
+            v1.to_excel(writer, sheet_name=f'MCS_{k1}')
+
+            results_df2 = pd.DataFrame(v2).T
+            plotting_mcs(results_df2, save_dir=f'{results_dir}/SPA_{k2}.png')
+            mean = results_df2.mean()
+            count10 = results_df2[results_df2 < 0.1].count().astype(str)
+            results_df2=results_df2.round(2).astype(str)
+            results_df2.loc['mean'] = mean.round(2).astype(str)
+            results_df2.loc['<10%'] = count10
+
+            v2 = results_df2
+            index = [[x.partition('_')[0], x.partition('_')[-1]] for x in v2.columns]
+            v2.columns = pd.MultiIndex.from_arrays(np.array(index).T.tolist())
+            v2.to_excel(writer, sheet_name=f'SPA_{k2}')
+
+            v1.iloc[:-1,:] = v1.iloc[:-1,:]
+            v2.iloc[:-1, :] = v2.iloc[:-1, :]
+            v3 = v1.astype(str) + ' / ' + v2.astype(str)
+            v3.to_excel(writer, sheet_name=f'all_{k1}')
 
 
-        for k, v in spa_store.items():
-            results_df = pd.DataFrame(v).T
-            plotting_mcs(results_df, save_dir=f'{results_dir}/SPA_{k}.png')
-            mean = results_df.mean()
-            count10 = results_df[results_df < 0.1].count()
-            results_df.loc['mean'] = mean
-            results_df.loc['<10%'] = count10
-
-            v = results_df
-            index = [[x.partition('_')[0], x.partition('_')[-1]] for x in v.columns]
-            v.columns = pd.MultiIndex.from_arrays(np.array(index).T.tolist())
-            v.to_excel(writer, sheet_name=f'SPA_{k}')
 
     writer.save()
     writer.close()
-
-
 
 
 def combine_poos_excel_results(excel_store, results_dir, name_store, selected_xgba):
@@ -866,7 +897,7 @@ def combine_poos_excel_results(excel_store, results_dir, name_store, selected_xg
 
         print_df_to_excel(df=v, ws=ws)
     wb.save(excel_name)
-    new_index = [f'{x}~{y}' for x,y in zip(v['start_dates'], v['end_dates'])]
+    new_index = [f'{x}~{y}' for x, y in zip(v['start_dates'], v['end_dates'])]
     book = openpyxl.load_workbook(excel_name)
     writer = pd.ExcelWriter(excel_name, engine='openpyxl')
     writer.book = book
@@ -886,8 +917,11 @@ def combine_poos_excel_results(excel_store, results_dir, name_store, selected_xg
         # Selected xgba columns with ar, pca, rf.
         v = v.drop([(model, variant) for model, variant in v.columns if
                     'xgba' in model and not variant in selected_xgba], axis=1)
-        v.index = new_index
-        v.to_excel(writer, sheet_name=f'{k}_rmse_selected')
+        v.to_excel(writer, sheet_name=f'{k}_rmse_sel')
+
+        # Relative to AR
+        v[v.columns[1:]] = v[v.columns[1:]] / v[[v.columns[0]]].values
+        v.to_excel(writer, sheet_name=f'{k}_rel_rmse_sel')
 
     writer.save()
     writer.close()

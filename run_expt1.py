@@ -44,7 +44,7 @@ def selector(case, **kwargs):
                                'max_depth': 1,
                                'colsample_bytree': 0.5,
                                }
-            hparam_opt_params = {'hparam_mode': 'bo', 'n_calls': 200, 'n_random_starts': 150,
+            hparam_opt_params = {'hparam_mode': 'bo', 'n_calls': 400, 'n_random_starts': 350,
                                  'val_mode': 'rep_holdout',
                                  'n_blocks': 5, 'cut_point': 0.95,
                                  'variables': {'max_depth': {'type': 'Integer', 'lower': 1, 'upper': 6},
@@ -52,7 +52,8 @@ def selector(case, **kwargs):
                                                'm': {'type': 'Integer', 'lower': 1, 'upper': 24},
                                                # 'p': {'type': 'Integer', 'lower': 1, 'upper': 48},
                                                'adap_gamma': {'type': 'Real', 'lower': -2, 'upper': 1.5},
-                                               #'gamma': {'type':'Real', 'lower':0, 'upper':5}
+                                               'gamma': {'type':'Real', 'lower':0, 'upper':5},
+                                               'learning_rate': {'type': 'Real', 'lower': 0.001, 'upper': 0.1},
                                                },
                                  }
         elif model_mode == 'rf':
@@ -117,10 +118,12 @@ def selector(case, **kwargs):
 
 
 if __name__ == '__main__':
-    selector(case=1, excel_dir='./excel/dataset_0720/CPIAUCSL_data_loader.xlsx', var_name='poos_CPIA_xgba_rh_s100', seed=100)
-    selector(case=1, excel_dir='./excel/dataset_0720/CPIAUCSL_data_loader.xlsx', var_name='poos_CPIA_xgba_rh_s200', seed=200)
-    selector(case=1, excel_dir='./excel/dataset_0720/CPIAUCSL_data_loader.xlsx', var_name='poos_CPIA_xgba_rh_s300', seed=300)
+    #selector(case=1, excel_dir='./excel/dataset_0720/CPIAUCSL_data_loader.xlsx', var_name='poos_CPIA_xgba_rh_s100', seed=100)
+    #selector(case=1, excel_dir='./excel/dataset_0720/CPIAUCSL_data_loader.xlsx', var_name='poos_CPIA_xgba_rh_s200', seed=200)
+    #selector(case=1, excel_dir='./excel/dataset_0720/CPIAUCSL_data_loader.xlsx', var_name='poos_CPIA_xgba_rh_s300', seed=300)
 
-    selector(case=1, excel_dir='./excel/dataset_0720/CPIA1_data_loader.xlsx', var_name='poos_CPIA1_xgba_rh_s100', seed=100)
-    selector(case=1, excel_dir='./excel/dataset_0720/CPIA1_data_loader.xlsx', var_name='poos_CPIA1_xgba_rh_s200', seed=200)
-    selector(case=1, excel_dir='./excel/dataset_0720/CPIA1_data_loader.xlsx', var_name='poos_CPIA1_xgba_rh_s300', seed=300)
+    #selector(case=1, excel_dir='./excel/dataset_0720/CPIA1_data_loader.xlsx', var_name='poos_CPIA1_xgba_rh_s100', seed=100)
+    #selector(case=1, excel_dir='./excel/dataset_0720/CPIA1_data_loader.xlsx', var_name='poos_CPIA1_xgba_rh_s200', seed=200)
+    #selector(case=1, excel_dir='./excel/dataset_0720/CPIA1_data_loader.xlsx', var_name='poos_CPIA1_xgba_rh_s300', seed=300)
+    selector(case=1, excel_dir='./excel/dataset_0720/INDPRO_data_loader.xlsx', var_name='poos_IND_xgbahp2_rh_s42',
+             seed=42)

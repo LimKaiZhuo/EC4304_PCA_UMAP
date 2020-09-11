@@ -1,29 +1,36 @@
 from own_package.poos import poos_analysis, poos_processed_data_analysis, poos_experiment, poos_model_evaluation, \
     poos_shap, poos_analysis_combining_xgb, poos_xgb_plotting_m, combine_poos_excel_results
-from own_package.others import create_results_directory, create_id_dict
+from own_package.others import create_results_directory, create_id_dict, create_id_store
 from own_package.features_labels import read_excel_data, read_excel_dataloader, Fl_master, Fl_pca, Fl_ar, \
     Fl_cw, Fl_xgb, hparam_selection
-from own_package.postprocess import difference_to_levels, plot_forecasts
+from own_package.postprocess import difference_to_levels, plot_forecasts, combine_poos_analysis
 
 
 def selector(case, **kwargs):
     if case == 1:
         pass
     elif case == 2:
-        excel_dir = './excel/dataset_0720/CPIA1_data_loader.xlsx'
+        '''
+        For xgb models. After finishing POOS experiments, run this to convert raw data in poos_hXX.pkl into forecasted
+        ehats. Performs online learning of optimal ntrees. Save results in another pickle object which is a dict of 
+        results.
+        '''
+        excel_dir = './excel/dataset_0720/INDPRO_data_loader.xlsx'
         output = read_excel_dataloader(excel_dir=excel_dir)
         fl_master = Fl_master(x=output[0], features_names=output[1],
                               yo=output[2], labels_names=output[3],
                               y=output[4], y_names=output[5],
                               time_stamp=output[6])
         first_est_date = '2005:1'
-        id = create_id_dict(var_name='CPIA1',
+        id = create_id_dict(var_name='IND',
                             h=[1, 3, 6, 12, 24],
                             est='rh',
-                            model='rf',
-                            model_name='rf',
+                            model='xgb',
+                            model_name='xgba',
                             expt='expt1',
-                            seed=42)
+                            combined_name=None,
+                            seed=42,
+                            results_dir='./results/expt1/model_combination_CPIA1')
         h_store = [1, 3, 6, 12, 24]
         h_idx_store = [0, 1, 2, 3, 4]
         for h, h_idx in zip(h_store, h_idx_store):
@@ -32,21 +39,31 @@ def selector(case, **kwargs):
                           first_est_date=first_est_date,
                           save_dir=f'{id["results_dir"]}/poos_h{h}.pkl')
     elif case == 3:
-        id = create_id_dict(var_name='CPIA1',
-                            h=[1, 3, 6, 12, 24],
-                            est='rh',
-                            model='xgb',
-                            model_name='xgba',
-                            expt='expt1',
-                            seed=42)
+        '''
+        Read pickle dict of results into excel.
+        '''
+        try:
+            id = kwargs['id']
+            levels = kwargs['levels']
+        except KeyError:
+            id = create_id_dict(var_name='IND',
+                                h=[1, 3, 6, 12, 24],
+                                est='rh',
+                                model='xgb',
+                                model_name='xgba',
+                                expt='expt1',
+                                combined_name=None,
+                                seed=42,
+                                results_dir='./results/expt1/model_combination_CPIA1')
+            levels = False
 
-        first_est_date = '2005:1'
-        est_dates = ['2004:12']
-        levels = True
         if levels:
             levels = '_levels'
         else:
             levels = ''
+        first_est_date = '2005:1'
+        est_dates = ['2004:12']
+
         poos_processed_data_analysis(
             save_dir_store=[f'{id["results_dir"]}/poos_{id["model"]}_h1_analysis_results{levels}.pkl',
                             f'{id["results_dir"]}/poos_{id["model"]}_h3_analysis_results{levels}.pkl',
@@ -71,12 +88,16 @@ def selector(case, **kwargs):
         # Plot information about m iteration errors for xgb. Uses the post processed of poos_h{}.pkl.
         h_store = [1, 3, 6, 12, 24]
         h_idx_store = [0, 1, 2, 3, 4]
-        results_dir = './results/expt1/poos_IND_xgba_rh_s42'
+        results_dir = './results/expt1/poos_CPIA1_xgba_rh_s42'
         for h, h_idx in zip(h_store, h_idx_store):
-            poos_xgb_plotting_m(h=h, results_dir=results_dir, ssm_modes=['ll', 'll*ln'])
+            poos_xgb_plotting_m(h=h, results_dir=results_dir, ssm_modes=['ll*ln'])
     elif case == 3.3:
-        rawdata_excel = './excel/2020-07.xlsx'
-        id = create_id_dict(var_name='CPIA',
+        '''
+        Convert pickled dict of results from I(1) or I(2) based on rawdata_excel and the varname into levels.
+        Then print the levels results into excel.
+        '''
+        rawdata_excel = './excel/2020-07_I1.xlsx'
+        id = create_id_dict(var_name='CPIA1',
                             h=[1, 3, 6, 12, 24],
                             est='rh',
                             model='xgb',
@@ -212,21 +233,21 @@ def selector(case, **kwargs):
         # Forecast evaluation DM
         h_store = [1, 3, 6, 12, 24]
 
-        output = read_excel_dataloader(excel_dir='./excel/dataset_0720/INDPRO_data_loader.xlsx')
+        output = read_excel_dataloader(excel_dir='./excel/dataset_0720/CPIA1_data_loader.xlsx')
         fl_master = Fl_master(x=output[0], features_names=output[1],
                               yo=output[2], labels_names=output[3],
                               y=output[4], y_names=output[5],
                               time_stamp=output[6])
 
         first_est_date = '2005:1'
-        est_dates = ['2004:12']
+        est_dates = ['2004:12',]
         var_store = {'CPIA': ['2008:11'],
                      'PAY': ['1975:3'],
                      'CMR': ['1975:1', '1980:6', '2009:2'],
                      'DPC': ['2020:3'],
                      'IND': ['1975:1', '1980:6', '2009:2'],
                      }
-        var_store = {'IND': []}
+        var_store = {'CPIA1': []}
 
         for var_name, dates in var_store.items():
             results_dir = create_results_directory(f'./results/expt1/model_eval_{var_name}')
@@ -250,7 +271,8 @@ def selector(case, **kwargs):
                                   est_dates=est_dates,
                                   combinations=[['rw', 'll*ln'],
                                                 ['rw', 'llt*ln'],
-                                                ['rw', 'll*ln', 'llt*ln'], ]
+                                                ['rw', 'll*ln', 'llt*ln'],
+                                                ]
                                   )
     elif case == 6:
         # Combine rmse excel together into 1 excel file
@@ -283,7 +305,57 @@ def selector(case, **kwargs):
                              model_name='rf',
                              expt='expt1',
                              seed=42)
-        id_store = [id1, id2, id3, ]  # id4]
+        id5 = create_id_dict(var_name=var_name,
+                             h=[1, 3, 6, 12, 24],
+                             est='rh',
+                             model='xgb',
+                             model_name='xgba',
+                             expt='expt1',
+                             seed=100)
+        id6 = create_id_dict(var_name=var_name,
+                             h=[1, 3, 6, 12, 24],
+                             est='rh',
+                             model='xgb',
+                             model_name='xgba',
+                             expt='expt1',
+                             seed=200)
+        id7 = create_id_dict(var_name=var_name,
+                             h=[1, 3, 6, 12, 24],
+                             est='rh',
+                             model='xgb',
+                             model_name='xgba',
+                             expt='expt1',
+                             seed=300)
+        id8 = create_id_dict(var_name=var_name,
+                             h=[1, 3, 6, 12, 24],
+                             est='rh',
+                             model='xgb',
+                             model_name='xgbahp',
+                             expt='expt1',
+                             seed=100)
+        id9 = create_id_dict(var_name=var_name,
+                             h=[1, 3, 6, 12, 24],
+                             est='rh',
+                             model='xgb',
+                             model_name='xgbahp',
+                             expt='expt1',
+                             seed=200)
+        id10 = create_id_dict(var_name=var_name,
+                              h=[1, 3, 6, 12, 24],
+                              est='rh',
+                              model='xgb',
+                              model_name='xgbahp',
+                              expt='expt1',
+                              seed=300)
+        id11 = create_id_dict(var_name=var_name,
+                            h=[1, 3, 6, 12, 24],
+                            combined_name='c&xgba', est='rh' ,seed='c',
+                            expt='expt1')
+        id12 = create_id_dict(var_name=var_name,
+                            h=[1, 3, 6, 12, 24],
+                            combined_name='c&xgbahp', est='rh',seed='c',
+                            expt='expt1')
+        id_store = [id1, id2, id3, id4,]# id5, id6, id7, id8, id9, id10, id11, id12]  # ]
         levels = True
 
         if levels:
@@ -293,27 +365,48 @@ def selector(case, **kwargs):
         excel_store = [f'./results/expt1/poos_{var_name}_ar/poos_analysis_ar{levels}.xlsx',
                        f'./results/expt1/poos_{var_name}_pca/poos_analysis_pca{levels}.xlsx', ] + \
                       [f'{x["results_dir"]}/poos_analysis_{x["model_full_name"]}{levels}.xlsx' for x in id_store]
-        name_store = ['ar', 'pca'] + [f'{x["model_name"]}({x["est"]})' for x in id_store]
+        name_store = ['ar', 'pca'] + [f'{x["model_name"]}({x["est"]}, s{x["seed"]})' for x in id_store]
         combine_poos_excel_results(excel_store=excel_store, results_dir='./results/expt1', name_store=name_store,
-                                   selected_xgba=['oracle', 'hparam', 'rw', 'll*ln', 'rw+ll*ln'])
+                                   selected_xgba=['oracle', 'hparam', 'rw', 'll','ll*ln', 'rw+ll*ln'])
     elif case == 6.1:
+        # Combining hXX analysis results pkl from different models into one via simple averaging
+        combined_name = 'c&xgbahp'
+        var_name = 'IND'
+        seed = [100, 200, 300]
+        est = ['rh'] * len(seed)
+        model = ['xgb'] * len(seed)
+        model_name = ['xgbahp'] * len(seed)
+        levels = False
+        est='rh'
+
+        id_store = create_id_store(var_name=var_name, expt_type='expt1',
+                                   est=est, model=model, model_name=model_name, seed=seed)
+
+        results_dir = create_results_directory(f'./results/expt1/model_combination_{var_name}_{combined_name}')
+        combine_poos_analysis(results_dir=results_dir, dir_store=[x['results_dir'] for x in id_store],
+                              levels=levels, combined_name=combined_name)
+
+        selector(case=3, levels=levels, id=create_id_dict(var_name=var_name,
+                                           h=[1, 3, 6, 12, 24],
+                                           combined_name=combined_name,
+                                           expt='expt1',
+                                                          est=est))
+
+    elif case == 6.2:
+        # Plotting levels forecast.
         var_name = 'CPIA'
         est = [None, None, 'rh', 'rfcv', 'rh', 'rfcv']
         model = ['ar', 'pca', 'xgb', 'xgb', 'rf', 'rf']
         model_name = ['ar', 'pca', 'xgba', 'xgba', 'rf', 'rf']
+        seed = [None, None, 42, 42, 42, 42]
         levels = True
 
+        id_store = create_id_store(var_name=var_name, expt_type='expt1',
+                                   est=est, model=model, model_name=model_name, seed=seed)
         if levels:
             levels = '_levels'
         else:
             levels = ''
-        id_store = [create_id_dict(var_name=var_name,
-                                   h=[1, 3, 6, 12, 24],
-                                   est=e,
-                                   model=m,
-                                   model_name=mn,
-                                   expt='expt1',
-                                   seed=42) for e, m, mn in zip(est, model, model_name)]
         save_dir_store = [[f'{id["results_dir"]}/poos_{id["model"]}_h1_analysis_results{levels}.pkl',
                            f'{id["results_dir"]}/poos_{id["model"]}_h3_analysis_results{levels}.pkl',
                            f'{id["results_dir"]}/poos_{id["model"]}_h6_analysis_results{levels}.pkl',
@@ -321,9 +414,40 @@ def selector(case, **kwargs):
                            f'{id["results_dir"]}/poos_{id["model"]}_h24_analysis_results{levels}.pkl',
                            ] for id in id_store]
         save_dir_store = [list(x) for x in zip(*save_dir_store)]
-        plot_forecasts(save_dir_store=save_dir_store, results_dir=f'./results/expt1/forecast_plots_{var_name}', model_names=model_name, est_store=est,
-                       h_store = id_store[0]['h'])
+        plot_forecasts(save_dir_store=save_dir_store, results_dir=f'./results/expt1/forecast_plots_{var_name}',
+                       model_names=model_name, est_store=est,
+                       h_store=id_store[0]['h'])
+    elif case == 7:
+        # SHAP plots
+        h_store = [1, 3, 6, 12, 24]
+        var_name = 'CPIA1'
+        excel_dir = './excel/dataset_0720/CPIA1_data_loader.xlsx'
+        id1 = create_id_dict(var_name=var_name,
+                             h=[1, 3, 6, 12, 24],
+                             est='rh',
+                             model='xgb',
+                             model_name='xgba',
+                             expt='expt1',
+                             seed=42)
+        results_dir = create_results_directory('./results/expt1/shap_{}'.format(var_name))
+        output = read_excel_dataloader(excel_dir=excel_dir)
+        fl_master = Fl_master(x=output[0], features_names=output[1],
+                              yo=output[2], labels_names=output[3],
+                              y=output[4], y_names=output[5],
+                              time_stamp=output[6])
+        fl_xgb = Fl_xgb(val_split=None, x=None, yo=None, y=None,
+                        time_stamp=None, time_idx=None,
+                        features_names=fl_master.features_names, labels_names=fl_master.labels_names,
+                        y_names=fl_master.y_names)
+        first_est_date = '2005:1'
+        poos_shap(fl_master=fl_master, fl=fl_xgb,
+                  xgb_store=[f'{id1["results_dir"]}/poos_h{h}.pkl' for h in h_store],
+                  first_est_date=first_est_date,
+                  results_dir=results_dir)
 
 
 if __name__ == '__main__':
-    selector(case=6.1, excel_dir='./excel/dataset_0720/CPIA1_data_loader.xlsx', var_name='poos_CPIA1_ar')
+    #selector(case=2, excel_dir='./excel/dataset_0720/CPIA1_data_loader.xlsx', var_name='poos_CPIA1_ar')
+    #selector(case=3, excel_dir='./excel/dataset_0720/CPIA1_data_loader.xlsx', var_name='poos_CPIA1_ar')
+    #selector(case=3.3, excel_dir='./excel/dataset_0720/CPIA1_data_loader.xlsx', var_name='poos_CPIA1_ar')
+    selector(case=3.2, excel_dir='./excel/dataset_0720/INDPRO_data_loader.xlsx', var_name='poos_IND_ar')
