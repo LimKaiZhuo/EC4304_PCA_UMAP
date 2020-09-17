@@ -127,7 +127,8 @@ def selector(case, **kwargs):
                        './results/poos/poos_IND_pca/poos_analysis_pca.xlsx', ] + \
                       [f'{x["results_dir"]}/poos_analysis_{x["model_full_name"]}.xlsx' for x in id_store]
         name_store = ['ar', 'pca'] + [f'{x["model_name"]}({x["est"]})' for x in id_store]
-        combine_poos_excel_results(excel_store=excel_store, results_dir='./results/poos', name_store=name_store,
+        combine_poos_excel_results(excel_store=excel_store, results_dir='./results/poos/combination',
+                                   name_store=name_store, expt_type='poos',
                                    selected_xgba=['oracle', 'rw', 'll*ln', 'rw+ll*ln'])
     elif case == 4:
         # Run poos experiment for ar4 or pca
@@ -229,6 +230,7 @@ def selector(case, **kwargs):
                               time_stamp=output[6])
 
         first_est_date = '1970:1'
+        est_dates = [f'{x}:12' for x in range(1969, 2020, 5)[:-1]]
         var_store = {'CPIA': ['2008:11'],
                      'PAY': ['1975:3'],
                      'CMR': ['1975:1', '1980:6', '2009:2'],
@@ -239,19 +241,30 @@ def selector(case, **kwargs):
 
         for var_name, dates in var_store.items():
             results_dir = create_results_directory(f'./results/poos/model_eval_{var_name}')
+            xgb_store = [x for x in zip(
+                [f'./results/poos/poos_{var_name}_xgba_rh_s42/poos_xgb_h{h}_analysis_results.pkl' for h in h_store],
+                [f'./results/poos/poos_{var_name}_xgba_rfcv_s42/poos_xgb_h{h}_analysis_results.pkl' for h in h_store],
+                [f'./results/poos/poos_{var_name}_rf_rh_s42/poos_rf_h{h}_analysis_results.pkl' for h in h_store],
+                [f'./results/poos/poos_{var_name}_rf_rfcv_s42/poos_rf_h{h}_analysis_results.pkl' for h in h_store],
+            )]
             poos_model_evaluation(fl_master=fl_master,
-                                  ar_store=[f'./results/poos/poos_{var_name}_ar/poos_ar_h{h}_analysis_results.pkl' for h
+                                  ar_store=[f'./results/poos/poos_{var_name}_ar/poos_ar_h{h}_analysis_results.pkl' for
+                                            h
                                             in h_store],
                                   pca_store=[f'./results/poos/poos_{var_name}_pca/poos_pca_h{h}_analysis_results.pkl'
                                              for h in h_store],
-                                  xgb_store=[
-                                      f'./results/poos/poos_{var_name}_xgba_rh_s42/poos_xgb_h{h}_analysis_results.pkl'
-                                      for h in h_store],
+                                  xgb_stores=xgb_store,
                                   results_dir=results_dir,
                                   blocked_dates=dates,
                                   first_est_date=first_est_date,
-                                  blocks=True)
-    elif case == 6:
+                                  blocks=True,
+                                  est_dates=est_dates,
+                                  combinations=[['rw', 'll*ln'],
+                                                ['rw', 'llt*ln'],
+                                                ['rw', 'll*ln', 'llt*ln'],
+                                                ]
+                                  )
+    elif case == 7:
         h_store = [1, 3, 6, 12, 24]
         var_name = kwargs['var_name']
         excel_dir = kwargs['excel_dir']

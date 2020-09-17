@@ -4,6 +4,7 @@ import math, random
 import cvxpy as cp
 import openpyxl, pickle, collections
 import matplotlib.pyplot as plt
+import os
 from openpyxl.utils.dataframe import dataframe_to_rows
 from own_package.dm_test import dm_test
 from own_package.others import create_excel_file, create_results_directory
@@ -37,6 +38,38 @@ def difference_to_levels(save_dir_store, h_store, rawdata_excel, first_est_date,
         data_store['data_df'] = data_df
         with open(save_dir.partition('.pkl')[0] + '_levels.pkl', 'wb') as handle:
             pickle.dump(data_store, handle)
+
+
+def combine_poos_analysis(results_dir, dir_store, levels=False, combined_name='combined'):
+    if levels:
+        levels = '_levels'
+    else:
+        levels = ''
+
+    h_store = [1,3,6,12,24]
+
+    for h in h_store:
+        df_store = []
+        for dir in dir_store:
+            data_df = None
+            for file in os.listdir(dir):
+                if f'h{h}_analysis_results{levels}.pkl' in file:
+                    with open(f'{dir}/{file}', 'rb') as handle:
+                        data_df = pickle.load(handle)['data_df']
+                    data_df = data_df[[f'y_{h}']+[x for x in data_df.columns if '_ehat' in x]]
+                    data_df[[x for x in data_df.columns if '_ehat' in x]] = data_df[[f'y_{h}']].values-data_df[[x for x in data_df.columns if '_ehat' in x]]
+                    df_store.append(data_df.copy())
+
+            if data_df is None:
+                raise FileNotFoundError(f'For {dir}, h step = {h} analysis results pickle file was not found')
+
+        # Take simple avg. of all the yhat from the different models in dir_store
+        data_df = pd.concat(objs=df_store, axis=0).groupby(level=0).mean()
+        data_df[[x for x in data_df.columns if '_ehat' in x]] = data_df[[f'y_{h}']].values - data_df[
+            [x for x in data_df.columns if '_ehat' in x]]
+
+        with open(f'{results_dir}/poos_{combined_name}_h{h}_analysis_results{levels}.pkl', 'wb') as handle:
+            pickle.dump({'data_df': data_df, 'combined_dir_store':dir_store}, handle)
 
 
 def plot_forecasts(save_dir_store, results_dir, model_names, est_store, h_store):
