@@ -1,7 +1,8 @@
 import numpy as np
+import matplotlib as mpl
+import seaborn as sns
 import openpyxl
 from openpyxl.utils.dataframe import dataframe_to_rows
-
 import os
 
 
@@ -124,3 +125,14 @@ def create_id_store(var_name,expt_type, est,  model, model_name,  seed):
                            expt=expt_type,
                            seed=s)
             for e, m, mn, s in zip(est, model, model_name, seed)]
+
+
+def set_matplotlib_style():
+    try:
+        del mpl.font_manager.weight_dict['roman']
+        mpl.font_manager._rebuild()
+    except KeyError:
+        pass
+    sns.set(style='ticks')
+    mpl.rc('font', family='Times New Roman')
+

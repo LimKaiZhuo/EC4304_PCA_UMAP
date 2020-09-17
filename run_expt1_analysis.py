@@ -420,8 +420,9 @@ def selector(case, **kwargs):
     elif case == 7:
         # SHAP plots
         h_store = [1, 3, 6, 12, 24]
-        var_name = 'CPIA1'
-        excel_dir = './excel/dataset_0720/CPIA1_data_loader.xlsx'
+        var_name = 'IND'
+        excel_dir = './excel/dataset_0720/INDPRO_data_loader.xlsx'
+        feature_info_dir = './excel/feature_info.xlsx'
         id1 = create_id_dict(var_name=var_name,
                              h=[1, 3, 6, 12, 24],
                              est='rh',
@@ -443,11 +444,12 @@ def selector(case, **kwargs):
         poos_shap(fl_master=fl_master, fl=fl_xgb,
                   xgb_store=[f'{id1["results_dir"]}/poos_h{h}.pkl' for h in h_store],
                   first_est_date=first_est_date,
-                  results_dir=results_dir)
+                  results_dir=results_dir,
+                  feature_info_dir=feature_info_dir)
 
 
 if __name__ == '__main__':
     #selector(case=2, excel_dir='./excel/dataset_0720/CPIA1_data_loader.xlsx', var_name='poos_CPIA1_ar')
     #selector(case=3, excel_dir='./excel/dataset_0720/CPIA1_data_loader.xlsx', var_name='poos_CPIA1_ar')
     #selector(case=3.3, excel_dir='./excel/dataset_0720/CPIA1_data_loader.xlsx', var_name='poos_CPIA1_ar')
-    selector(case=3.2, excel_dir='./excel/dataset_0720/INDPRO_data_loader.xlsx', var_name='poos_IND_ar')
+    selector(case=7, excel_dir='./excel/dataset_0720/INDPRO_data_loader.xlsx', var_name='poos_IND_ar')
