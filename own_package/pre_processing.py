@@ -292,7 +292,7 @@ def getWeights(d,size):
         w_=-w[-1]/k*(d-k+1)
         w.append(w_)
     w=np.array(w[::-1]).reshape(-1,1)
-    return w1
+    return w
 
 
 def fracDiff_FFD(series,d,thres=1e-5):

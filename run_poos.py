@@ -24,7 +24,7 @@ def selector(case, **kwargs):
 
         first_est_date = '1970:1'
 
-        model_mode = 'rf'
+        model_mode = 'xgb'
         if model_mode == 'xgb' or model_mode == 'xgb_with_hparam':
             default_hparams = {'seed': 42,
                                'booster': 'gbtree',
@@ -88,7 +88,7 @@ def selector(case, **kwargs):
             hparam_opt_params = None
 
         hparam_save_dir = './results/poos/poos_IND_xgbar'
-        est_dates = [f'{x}:12' for x in range(1994, 2020, 5)[:-1]]
+        est_dates = [f'{x}:12' for x in range(1969, 2020, 5)[:-1]]
         #poos_experiment(fl_master=fl_master, fl=fl_xgb, est_dates=est_dates, z_type=1, h=1, h_idx=0,
         #                m_max=12, p_max=24, model_mode=model_mode, save_dir=results_dir, first_est_date=first_est_date,
         #                default_hparams=default_hparams, hparam_opt_params=hparam_opt_params,
