@@ -28,10 +28,6 @@ def poos_experiment(fl_master, fl, est_dates, z_type, h, h_idx, m_max, p_max, fi
 
     data_store = []
 
-    if model_mode == 'xgb_with_hparam':
-        with open(f'{kwargs["hparam_save_dir"]}/poos_h{h}.pkl', 'rb') as handle:
-            hparam_data_store = pickle.load(handle)
-
     for idx, (est_date, next_tune_date) in enumerate(zip(est_dates[:-1], est_dates[1:])):
         t1 = time.perf_counter()
         (x_est, _), (yo_est, _), (y_est, _), (ts_est, _), _, _ = fl_master.date_split(est_date)
@@ -77,8 +73,7 @@ def poos_experiment(fl_master, fl, est_dates, z_type, h, h_idx, m_max, p_max, fi
             with open('{}/poos_h{}.pkl'.format(save_dir, h), "wb") as file:
                 pickle.dump(data_store, file)
         elif model_mode == 'xgb_with_hparam':
-            hparams_df = hparam_data_store[idx]['hparams_df']
-            hparams = {**kwargs['default_hparams'], **hparams_df.iloc[0, :].to_dict()}
+            hparams = {**kwargs['default_hparams'], **kwargs['set_hparam'][h]}
             hparams['early_stopping_rounds'] = None
             hparams['m'] = int(hparams['m'])
             hparams['max_depth'] = int(hparams['max_depth'])
@@ -1044,7 +1039,8 @@ class Shap_data:
         self.grouped_df.columns = pd.MultiIndex.from_tuples(multi_column)
 
 
-def poos_shap(fl_master, fl, xgb_store, first_est_date, results_dir, feature_info_dir, est_dates=None):
+def poos_shap(fl_master, fl, xgb_store, first_est_date, results_dir, feature_info_dir, est_dates=None,
+              other_xgb_store=None):
     set_matplotlib_style()
 
     feature_info_df = pd.read_excel(feature_info_dir, index_col=0)
@@ -1056,6 +1052,85 @@ def poos_shap(fl_master, fl, xgb_store, first_est_date, results_dir, feature_inf
     ts = fl_master.time_stamp[idx:]
     info_df = {}
     fi_df_store = []
+
+    def get_top_columns_per_row(df, n_top):
+        ranked_matrix = np.argsort(-df.values, axis=1)[:, :n_top]
+        return pd.DataFrame(df.columns.values[ranked_matrix],
+                            index=df.index,
+                            columns=[f'Rank {idx + 1}' for idx in range(n_top)]), \
+               pd.DataFrame(df.values[np.repeat(np.arange(df.shape[0])[:, None], n_top, axis=1), ranked_matrix],
+                            index=df.index,
+                            columns=[f'Rank {idx + 1}' for idx in range(n_top)])
+
+    def print_df(sheet_name, df, h):
+        wb.create_sheet(f'h{h}_{sheet_name}')
+        ws = wb[f'h{h}_{sheet_name}']
+        print_df_to_excel(ws=ws, df=df)
+
+    def get_grouped_df(xgb_data, first_est_date, ts_index):
+        poos_data_store = dict(zip(ts_index,
+                                   [{'data': x,
+                                     'hparam': blocks['hparams_df'].iloc[0, :],
+                                     'feature_names':blocks['poos_data_store'][0]['feature_names']
+                                     } for blocks in xgb_data for x in blocks['poos_data_store']]))
+        grouped_df = []
+        sd = Shap_data(poos_data_store[first_est_date]['data']['shap_values'].toarray(), poos_data_store[first_est_date]['feature_names'])
+        sd.add_feature_data(fl_master, fl, hparams=poos_data_store[first_est_date]['hparam'], h=h,
+                            ts=first_est_date, update_ts_only=True,
+                            expected_value=poos_data_store[first_est_date]['data']['expected_value'])
+        sd.add_feature_info(feature_info_df, h=h)
+        grouped_df.append(sd.grouped_df.copy())
+        for date, v in poos_data_store.items():
+            if date == first_est_date:
+                continue
+            sd = Shap_data(v['data']['shap_values'].toarray(), poos_data_store[date]['feature_names'])
+            sd.add_feature_data(fl_master, fl, hparams=v['hparam'], h=h,
+                                ts=date, update_ts_only=True,
+                                expected_value=v['data']['expected_value'])
+            sd.add_feature_info(feature_info_df, h=h)
+            grouped_df.append(sd.grouped_df.iloc[[-1], :].copy())
+
+        return pd.concat(grouped_df, axis=0)
+
+    def norm_grouped_df_plotting(grouped_df, name='finalmodel'):
+        norm_grouped_df = grouped_df.div(grouped_df.sum(axis=1), axis=0)
+
+        '''
+        # AR Plot
+        grouped_df.columns = grouped_df.columns.get_level_values(0)
+        grouped_df['y'].rolling(12).mean().plot()
+        plt.show()
+        plt.close()
+        '''
+
+        # Stacked area plot for SHAP vs time with hue=Groups
+        norm_grouped_df.groupby(level=1, axis=1).sum().rolling(12).mean().plot.area().legend(
+            loc='center left', bbox_to_anchor=(1, 0.5))
+        fig = plt.gcf()
+        fig.set_size_inches(10, 4)
+        sns.despine()
+        plt.xlim(xmin=12)
+        plt.ylabel('Normalized Grouped |SHAP|')
+        plt.savefig(f'{results_dir}/h{h}_{name}_stackedplot.png', bbox_inches='tight')
+        plt.close()
+
+        # Joyplot for Distribution of SHAP values across time averaged in 11 blocks
+        temp_df = norm_grouped_df.reset_index()
+        temp_df = temp_df.groupby(temp_df.index // 12).mean()
+        temp_index = norm_grouped_df.index[::12]
+        temp_df.index = temp_index
+        temp_df = temp_df.reset_index().rename(
+            columns={'index': 'Date'}).melt(id_vars='Date', var_name=['Var', 'Group'],
+                                            value_name='|SHAP|')
+        labels = [y if int(y.partition(':')[0]) % 10 == 0 else None for y in list(temp_index)]
+        fig, axes = joypy.joyplot(temp_df, by="Date", column="|SHAP|", labels=labels,
+                                  range_style='own', x_range=[0, 0.1], fade=True,
+                                  grid="y", linewidth=1, legend=False, figsize=(6, 6),
+                                  colormap=cm.autumn_r)
+        plt.savefig(f'{results_dir}/h{h}_{name}_ridgelineplot.png', bbox_inches='tight')
+        plt.close()
+
+
     for xgb_dir, h in zip(xgb_store, [1, 3, 6, 12, 24]):
         with open(xgb_dir, 'rb') as handle:
             xgb_data = pickle.load(handle)
@@ -1128,25 +1203,13 @@ def poos_shap(fl_master, fl, xgb_store, first_est_date, results_dir, feature_inf
         gshap_abs = pd.concat(grouped_shap_abs, axis=1).T
         gshap_abs.index = ts
 
-        def get_top_columns_per_row(df, n_top):
-            ranked_matrix = np.argsort(-df.values, axis=1)[:, :n_top]
-            return pd.DataFrame(df.columns.values[ranked_matrix],
-                                index=df.index,
-                                columns=[f'Rank {idx + 1}' for idx in range(n_top)]), \
-                   pd.DataFrame(df.values[np.repeat(np.arange(df.shape[0])[:, None], n_top, axis=1), ranked_matrix],
-                                index=df.index,
-                                columns=[f'Rank {idx + 1}' for idx in range(n_top)])
+
 
         top_shap_names, top_shap_values = get_top_columns_per_row(df=shap_abs, n_top=10)
         top_gshap_names, top_gshap_values = get_top_columns_per_row(df=gshap_abs, n_top=10)
 
         # gshap_abs_norm = gshap_abs.div(gshap_abs.max(axis=1), axis=0)
         # gshap_abs.plot(y=np.unique(top_gshap_names.values))
-
-        def print_df(sheet_name, df, h):
-            wb.create_sheet(f'h{h}_{sheet_name}')
-            ws = wb[f'h{h}_{sheet_name}']
-            print_df_to_excel(ws=ws, df=df)
 
         print_df('shap_names', df=top_shap_names.applymap(str), h=h)
         print_df('shap_values', df=top_shap_values, h=h)
@@ -1185,62 +1248,21 @@ def poos_shap(fl_master, fl, xgb_store, first_est_date, results_dir, feature_inf
                 sd.add_feature_info(feature_info_df, h=h)
                 fi_df_store.append(sd.feature_info_df)
 
-                grouped_df = []
+                grouped_df = get_grouped_df(xgb_data, first_est_date, fl_master.time_stamp[idx:])
+                norm_grouped_df_plotting(grouped_df, 's42')
+
+                if other_xgb_store:
+                    grouped_df_store = [grouped_df.copy()]
+                    for other_xgb_dict in other_xgb_store:
+                        with open(other_xgb_dict[h], 'rb') as handle:
+                            data = pickle.load(handle)
+                        grouped_df_store.append(get_grouped_df(data, first_est_date, fl_master.time_stamp[idx:]))
+                    grouped_df = pd.concat(grouped_df_store, axis=0).groupby(axis=0, level=0).mean()
+                    norm_grouped_df_plotting(grouped_df=grouped_df, name='s42,100,200,300')
 
 
-                sd = Shap_data(poos_data_store[first_est_date]['data']['shap_values'].toarray(), feature_names)
-                sd.add_feature_data(fl_master, fl, hparams=poos_data_store[first_est_date]['hparam'], h=h,
-                                    ts=first_est_date, update_ts_only=True,
-                                    expected_value=poos_data_store[first_est_date]['data']['expected_value'])
-                sd.add_feature_info(feature_info_df, h=h)
-                grouped_df.append(sd.grouped_df.copy())
 
-                for date, v in poos_data_store.items():
-                    sd = Shap_data(v['data']['shap_values'].toarray(), feature_names)
-                    sd.add_feature_data(fl_master, fl, hparams=v['hparam'], h=h,
-                                        ts=date, update_ts_only=True,
-                                        expected_value=v['data']['expected_value'])
-                    sd.add_feature_info(feature_info_df, h=h)
-                    grouped_df.append(sd.grouped_df.iloc[[-1],:].copy())
 
-                grouped_df = pd.concat(grouped_df, axis=0)
-                norm_grouped_df = grouped_df.div(grouped_df.sum(axis=1), axis=0)
-
-                '''
-                # AR Plot
-                grouped_df.columns = grouped_df.columns.get_level_values(0)
-                grouped_df['y'].rolling(12).mean().plot()
-                plt.show()
-                plt.close()
-                '''
-
-                # Stacked area plot for SHAP vs time with hue=Groups
-                norm_grouped_df.groupby(level=1, axis=1).sum().rolling(12).mean().plot.area().legend(
-                    loc='center left', bbox_to_anchor=(1, 0.5))
-                fig = plt.gcf()
-                fig.set_size_inches(10, 4)
-                sns.despine()
-                plt.xlim(xmin=12)
-                plt.ylabel('Normalized Grouped |SHAP|')
-                plt.savefig(f'{results_dir}/h{h}_finalmodel_stackedplot.png', bbox_inches='tight')
-                plt.close()
-
-                '''
-                # Joyplot for Distribution of SHAP values across time averaged in 11 blocks
-                temp_df = norm_grouped_df.reset_index()
-                temp_df = temp_df.groupby(temp_df.index//12).mean()
-                temp_index = norm_grouped_df.index[::12]
-                temp_df.index = temp_index
-                temp_df = temp_df.reset_index().rename(
-                columns={'index': 'Date'}).melt(id_vars='Date', var_name=['Var', 'Group'],
-                                                    value_name='|SHAP|')
-                fig, axes = joypy.joyplot(temp_df, by="Date", column="|SHAP|", labels=temp_index,
-                                          range_style='all', hist=True, x_range=[0, 0.1], fade=True,
-                                          grid="y", linewidth=1, legend=False, figsize=(6, 6), colormap=cm.plasma,
-                                          bins=30)
-                plt.savefig(f'{results_dir}/h{h}_finalmodel_joyplot.png', bbox_inches='tight')
-                plt.close()
-                '''
 
     fi_df = pd.concat(fi_df_store, axis=0)
     fi_df['|SHAP|'] = fi_df[['|SHAP|', 'h']].groupby('h').transform(lambda x: x / (x.sum()))

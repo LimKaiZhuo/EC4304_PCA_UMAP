@@ -23,7 +23,7 @@ def selector(case, **kwargs):
                         y_names=fl_master.y_names)
         first_est_date = '2005:1'
         est_dates = ['2004:12']
-        model_mode = 'xgb'
+        model_mode = 'xgb_with_hparam'
         if model_mode == 'xgb' or model_mode == 'xgb_with_hparam':
             default_hparams = {'seed': seed,
                                'booster': 'gbtree',
@@ -52,8 +52,8 @@ def selector(case, **kwargs):
                                                'm': {'type': 'Integer', 'lower': 1, 'upper': 24},
                                                # 'p': {'type': 'Integer', 'lower': 1, 'upper': 48},
                                                'adap_gamma': {'type': 'Real', 'lower': -2, 'upper': 1.5},
-                                               'gamma': {'type':'Real', 'lower':0, 'upper':5},
-                                               'learning_rate': {'type': 'Real', 'lower': 0.001, 'upper': 0.1},
+                                               # 'gamma': {'type':'Real', 'lower':0, 'upper':5},
+                                               # 'learning_rate': {'type': 'Real', 'lower': 0.001, 'upper': 0.1},
                                                },
                                  }
         elif model_mode == 'rf':
@@ -85,45 +85,45 @@ def selector(case, **kwargs):
                                                },
                                  }
         else:
-            default_hparams=None
+            default_hparams = None
             hparam_opt_params = None
 
-        hparam_save_dir = './results/poos/poos_IND_xgbar'
         poos_experiment(fl_master=fl_master, fl=fl_xgb, est_dates=est_dates, z_type=1, h=1, h_idx=0,
                         m_max=12, p_max=24, model_mode=model_mode, save_dir=results_dir, first_est_date=first_est_date,
                         default_hparams=default_hparams, hparam_opt_params=hparam_opt_params,
-                        hparam_save_dir=hparam_save_dir
+                        set_hparam=kwargs['set_hparam']
                         )
         poos_experiment(fl_master=fl_master, fl=fl_xgb, est_dates=est_dates, z_type=1, h=3, h_idx=1,
                         m_max=12, p_max=24, model_mode=model_mode, save_dir=results_dir, first_est_date=first_est_date,
                         default_hparams=default_hparams, hparam_opt_params=hparam_opt_params,
-                        hparam_save_dir=hparam_save_dir
+                        set_hparam=kwargs['set_hparam']
                         )
         poos_experiment(fl_master=fl_master, fl=fl_xgb, est_dates=est_dates, z_type=1, h=6, h_idx=2,
-                       m_max=12, p_max=24, model_mode=model_mode, save_dir=results_dir,first_est_date=first_est_date,
-                       default_hparams=default_hparams, hparam_opt_params=hparam_opt_params,
-                       hparam_save_dir=hparam_save_dir
-                       )
+                        m_max=12, p_max=24, model_mode=model_mode, save_dir=results_dir, first_est_date=first_est_date,
+                        default_hparams=default_hparams, hparam_opt_params=hparam_opt_params,
+                        set_hparam=kwargs['set_hparam']
+                        )
         poos_experiment(fl_master=fl_master, fl=fl_xgb, est_dates=est_dates, z_type=1, h=12, h_idx=3,
-                       m_max=12, p_max=24, model_mode=model_mode, save_dir=results_dir,first_est_date=first_est_date,
-                       default_hparams=default_hparams, hparam_opt_params=hparam_opt_params,
-                       hparam_save_dir=hparam_save_dir
-                       )
+                        m_max=12, p_max=24, model_mode=model_mode, save_dir=results_dir, first_est_date=first_est_date,
+                        default_hparams=default_hparams, hparam_opt_params=hparam_opt_params,
+                        set_hparam=kwargs['set_hparam']
+                        )
         poos_experiment(fl_master=fl_master, fl=fl_xgb, est_dates=est_dates, z_type=1, h=24, h_idx=4,
-                       m_max=12, p_max=24, model_mode=model_mode, save_dir=results_dir,first_est_date=first_est_date,
-                       default_hparams=default_hparams, hparam_opt_params=hparam_opt_params,
-                       hparam_save_dir=hparam_save_dir
-                       )
-
+                        m_max=12, p_max=24, model_mode=model_mode, save_dir=results_dir, first_est_date=first_est_date,
+                        default_hparams=default_hparams, hparam_opt_params=hparam_opt_params,
+                        set_hparam=kwargs['set_hparam']
+                        )
 
 
 if __name__ == '__main__':
-    #selector(case=1, excel_dir='./excel/dataset_0720/CPIAUCSL_data_loader.xlsx', var_name='poos_CPIA_xgba_rh_s100', seed=100)
-    #selector(case=1, excel_dir='./excel/dataset_0720/CPIAUCSL_data_loader.xlsx', var_name='poos_CPIA_xgba_rh_s200', seed=200)
-    #selector(case=1, excel_dir='./excel/dataset_0720/CPIAUCSL_data_loader.xlsx', var_name='poos_CPIA_xgba_rh_s300', seed=300)
+    # selector(case=1, excel_dir='./excel/dataset_0720/CPIAUCSL_data_loader.xlsx', var_name='poos_CPIA_xgba_rh_s100', seed=100)
+    # selector(case=1, excel_dir='./excel/dataset_0720/CPIAUCSL_data_loader.xlsx', var_name='poos_CPIA_xgba_rh_s200', seed=200)
+    # selector(case=1, excel_dir='./excel/dataset_0720/CPIAUCSL_data_loader.xlsx', var_name='poos_CPIA_xgba_rh_s300', seed=300)
 
-    #selector(case=1, excel_dir='./excel/dataset_0720/CPIA1_data_loader.xlsx', var_name='poos_CPIA1_xgba_rh_s100', seed=100)
-    #selector(case=1, excel_dir='./excel/dataset_0720/CPIA1_data_loader.xlsx', var_name='poos_CPIA1_xgba_rh_s200', seed=200)
-    #selector(case=1, excel_dir='./excel/dataset_0720/CPIA1_data_loader.xlsx', var_name='poos_CPIA1_xgba_rh_s300', seed=300)
-    selector(case=1, excel_dir='./excel/dataset_0720/INDPRO_data_loader.xlsx', var_name='poos_IND_xgbahp2_rh_s42',
-             seed=42)
+    # selector(case=1, excel_dir='./excel/dataset_0720/CPIA1_data_loader.xlsx', var_name='poos_CPIA1_xgba_rh_s100', seed=100)
+    # selector(case=1, excel_dir='./excel/dataset_0720/CPIA1_data_loader.xlsx', var_name='poos_CPIA1_xgba_rh_s200', seed=200)
+    # selector(case=1, excel_dir='./excel/dataset_0720/CPIA1_data_loader.xlsx', var_name='poos_CPIA1_xgba_rh_s300', seed=300)
+
+    set_hparam = {h: {'max_depth': 3, 'colsample_bytree': 0.75, 'm': 6, 'adap_gamma': -2} for h in [1, 3, 6, 12, 24]}
+    selector(case=1, excel_dir='./excel/dataset_0720/CPIA1_data_loader.xlsx', var_name='poos_CPIA1_xgbagamma_rh_s42',
+             seed=42, set_hparam=set_hparam)

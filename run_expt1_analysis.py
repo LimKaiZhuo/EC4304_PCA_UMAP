@@ -430,6 +430,27 @@ def selector(case, **kwargs):
                              model_name='xgba',
                              expt='expt1',
                              seed=42)
+        id2 = create_id_dict(var_name=var_name,
+                             h=[1, 3, 6, 12, 24],
+                             est='rh',
+                             model='xgb',
+                             model_name='xgba',
+                             expt='expt1',
+                             seed=100)
+        id3 = create_id_dict(var_name=var_name,
+                             h=[1, 3, 6, 12, 24],
+                             est='rh',
+                             model='xgb',
+                             model_name='xgba',
+                             expt='expt1',
+                             seed=200)
+        id4 = create_id_dict(var_name=var_name,
+                             h=[1, 3, 6, 12, 24],
+                             est='rh',
+                             model='xgb',
+                             model_name='xgba',
+                             expt='expt1',
+                             seed=300)
         results_dir = create_results_directory('./results/expt1/shap_{}'.format(var_name))
         output = read_excel_dataloader(excel_dir=excel_dir)
         fl_master = Fl_master(x=output[0], features_names=output[1],
@@ -441,8 +462,10 @@ def selector(case, **kwargs):
                         features_names=fl_master.features_names, labels_names=fl_master.labels_names,
                         y_names=fl_master.y_names)
         first_est_date = '2005:1'
+        other_xgb_store = [{h:f'{id_["results_dir"]}/poos_h{h}.pkl' for h in h_store} for id_ in [id2,id3,id4]]
         poos_shap(fl_master=fl_master, fl=fl_xgb,
                   xgb_store=[f'{id1["results_dir"]}/poos_h{h}.pkl' for h in h_store],
+                  other_xgb_store=other_xgb_store,
                   first_est_date=first_est_date,
                   results_dir=results_dir,
                   feature_info_dir=feature_info_dir)
