@@ -124,6 +124,7 @@ if __name__ == '__main__':
     # selector(case=1, excel_dir='./excel/dataset_0720/CPIA1_data_loader.xlsx', var_name='poos_CPIA1_xgba_rh_s200', seed=200)
     # selector(case=1, excel_dir='./excel/dataset_0720/CPIA1_data_loader.xlsx', var_name='poos_CPIA1_xgba_rh_s300', seed=300)
 
-    set_hparam = {h: {'max_depth': 3, 'colsample_bytree': 0.75, 'm': 6, 'adap_gamma': -2} for h in [1, 3, 6, 12, 24]}
+    set_hparam = {h: {'max_depth': 3, 'colsample_bytree': 0.75, 'm': 6, 'adap_gamma': -2, 'm iters': 100}
+                  for h in [1, 3, 6, 12, 24]}
     selector(case=1, excel_dir='./excel/dataset_0720/CPIA1_data_loader.xlsx', var_name='poos_CPIA1_xgbagamma_rh_s42',
              seed=42, set_hparam=set_hparam)

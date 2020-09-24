@@ -93,7 +93,7 @@ def poos_experiment(fl_master, fl, est_dates, z_type, h, h_idx, m_max, p_max, fi
                                                                save_name=None)
             data_store.append({'est_date': est_date,
                                'next_tune_date': next_tune_date,
-                               'hparams_df': hparams_df,
+                               'hparams_df': pd.DataFrame.from_dict({0:kwargs['set_hparam'][h]}, orient='index'),
                                'poos_data_store': poos_data_store},
                               )
             with open('{}/poos_h{}.pkl'.format(save_dir, h), "wb") as file:
