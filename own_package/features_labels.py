@@ -733,6 +733,38 @@ class Fl_ar(Fl_master):
 
         return y_hat_store, e_hat_store, math.sqrt(np.mean(np.array(e_hat_store) ** 2)), results_t
 
+    def rw_pls_expanding_window(self, y_t, y_v, h,
+                                save_dir=None, save_name=None):
+        y_hat_store = []
+        e_hat_store = []
+
+        for idx, y_1 in enumerate(y_v.tolist()):
+            y_t = np.concatenate((y_t, np.array(y_1)[None, ...]), axis=0)
+            yo_LM_t, y_RO_t = self.ar_prepare_data_matrix(y_t, y_t, h, 1)
+
+            y_1_hat = yo_LM_t[-1]
+            e_1_hat = y_1 - y_1_hat
+
+            y_hat_store.append(y_1_hat.item())
+            e_hat_store.append(e_1_hat.item())
+
+            if save_dir:
+                try:
+                    data_store.append({'y_hat': y_1_hat.item(),
+                                       'e_hat': e_1_hat.item(),})
+                except:
+                    data_store = [{'y_hat': y_1_hat.item(),
+                                   'e_hat': e_1_hat.item(),}]
+
+
+
+
+        if save_dir:
+            with open('{}/{}_p{}_h{}.pkl'.format(save_dir, save_name, p, h), "wb") as file:
+                pickle.dump(data_store, file)
+
+        return y_hat_store, e_hat_store, math.sqrt(np.mean(np.array(e_hat_store) ** 2))
+
     def ar_hparam_opt(self, yo, y, h, p_max):
         hparams_store = list(range(1, p_max + 1))
         aic_store = []

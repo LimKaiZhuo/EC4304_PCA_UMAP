@@ -181,6 +181,15 @@ def poos_experiment(fl_master, fl, est_dates, z_type, h, h_idx, m_max, p_max, fi
                                'yhat': yhat},
                               )
 
+        elif model_mode == 'rw':
+            yhat, ehat, _ = fl.rw_pls_expanding_window(y_t=y_est[:, h_idx][..., None], y_v=y_tt[:, h_idx][..., None],
+                                                       h=h, save_dir=None, save_name=None)
+            data_store.append({'est_date': est_date,
+                               'next_tune_date': next_tune_date,
+                               'ehat': ehat,
+                               'yhat': yhat},
+                              )
+
         t2 = time.perf_counter()
         print(f'Completed {est_date} for h={h}. Time taken {t2 - t1}')
 
@@ -204,8 +213,12 @@ def poos_experiment(fl_master, fl, est_dates, z_type, h, h_idx, m_max, p_max, fi
         with open(f'{save_dir}/poos_{model_mode}_h{h}_analysis_results.pkl', "wb") as file:
             pickle.dump({'data_df': data_df, 'hparam_df': hparam_df}, file)
 
-    elif model_mode in ['pca', 'ar']:
-        hparam_df = pd.concat([data['hparams_df'].iloc[0, :] for data in data_store], axis=1).T
+    elif model_mode in ['pca', 'ar', 'rw']:
+        try:
+            hparam_df = pd.concat([data['hparams_df'].iloc[0, :] for data in data_store], axis=1).T
+        except KeyError:
+            # Means it is rw as rw has no hyperparameters
+            hparam_df = None
 
         idx = fl_master.time_stamp.index(first_est_date)
         y = fl_master.y[idx:, h_idx]
@@ -510,6 +523,7 @@ def poos_processed_data_analysis(results_dir, save_dir_store, h_store, model_ful
             rmse_store.append((ehat_df.iloc[start:end, :] ** 2).mean(axis=0) ** 0.5)
 
         if not skip:
+            # Means include the categorical horizons
             start_store = ['1970:1', '1970:1', '1970:1', '1983:1', '2007:1', '2019:12']  # Inclusive
             end_store = ['2020:1', '2020:12', '1983:1', '2007:1', '2020:1', '2020:12']  # Exclusive of those dates
 
@@ -541,7 +555,8 @@ def poos_processed_data_analysis(results_dir, save_dir_store, h_store, model_ful
         # Combining data into dataframe
         try:
             df = pd.concat((pd.concat(rmse_store, axis=1).T, data_store['hparam_df'].reset_index()), axis=1)
-        except KeyError:
+        except (KeyError, AttributeError):
+            # AttributeError means it is rw which does not have hparam_df
             df = pd.concat(rmse_store, axis=1).T
 
         if not skip:
@@ -1187,7 +1202,6 @@ def poos_shap(fl_master, fl, xgb_store, first_est_date, results_dir, feature_inf
 
                 grouped_df = []
 
-
                 sd = Shap_data(poos_data_store[first_est_date]['data']['shap_values'].toarray(), feature_names)
                 sd.add_feature_data(fl_master, fl, hparams=poos_data_store[first_est_date]['hparam'], h=h,
                                     ts=first_est_date, update_ts_only=True,
@@ -1201,7 +1215,7 @@ def poos_shap(fl_master, fl, xgb_store, first_est_date, results_dir, feature_inf
                                         ts=date, update_ts_only=True,
                                         expected_value=v['data']['expected_value'])
                     sd.add_feature_info(feature_info_df, h=h)
-                    grouped_df.append(sd.grouped_df.iloc[[-1],:].copy())
+                    grouped_df.append(sd.grouped_df.iloc[[-1], :].copy())
 
                 grouped_df = pd.concat(grouped_df, axis=0)
                 norm_grouped_df = grouped_df.div(grouped_df.sum(axis=1), axis=0)
