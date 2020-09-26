@@ -15,22 +15,21 @@ def selector(case, **kwargs):
         ehats. Performs online learning of optimal ntrees. Save results in another pickle object which is a dict of 
         results.
         '''
-        excel_dir = './excel/dataset_0720/INDPRO_data_loader.xlsx'
+        excel_dir = './excel/dataset_0720/CPIA1_data_loader.xlsx'
         output = read_excel_dataloader(excel_dir=excel_dir)
         fl_master = Fl_master(x=output[0], features_names=output[1],
                               yo=output[2], labels_names=output[3],
                               y=output[4], y_names=output[5],
                               time_stamp=output[6])
         first_est_date = '2005:1'
-        id = create_id_dict(var_name='IND',
+        id = create_id_dict(var_name='CPIA1',
                             h=[1, 3, 6, 12, 24],
                             est='rh',
                             model='xgb',
-                            model_name='xgba',
+                            model_name='xgbag0',
                             expt='expt1',
                             combined_name=None,
-                            seed=42,
-                            results_dir='./results/expt1/model_combination_CPIA1')
+                            seed=42,)
         h_store = [1, 3, 6, 12, 24]
         h_idx_store = [0, 1, 2, 3, 4]
         for h, h_idx in zip(h_store, h_idx_store):
@@ -430,6 +429,27 @@ def selector(case, **kwargs):
                              model_name='xgba',
                              expt='expt1',
                              seed=42)
+        id2 = create_id_dict(var_name=var_name,
+                             h=[1, 3, 6, 12, 24],
+                             est='rh',
+                             model='xgb',
+                             model_name='xgba',
+                             expt='expt1',
+                             seed=100)
+        id3 = create_id_dict(var_name=var_name,
+                             h=[1, 3, 6, 12, 24],
+                             est='rh',
+                             model='xgb',
+                             model_name='xgba',
+                             expt='expt1',
+                             seed=200)
+        id4 = create_id_dict(var_name=var_name,
+                             h=[1, 3, 6, 12, 24],
+                             est='rh',
+                             model='xgb',
+                             model_name='xgba',
+                             expt='expt1',
+                             seed=300)
         results_dir = create_results_directory('./results/expt1/shap_{}'.format(var_name))
         output = read_excel_dataloader(excel_dir=excel_dir)
         fl_master = Fl_master(x=output[0], features_names=output[1],
@@ -441,8 +461,10 @@ def selector(case, **kwargs):
                         features_names=fl_master.features_names, labels_names=fl_master.labels_names,
                         y_names=fl_master.y_names)
         first_est_date = '2005:1'
+        other_xgb_store = [{h:f'{id_["results_dir"]}/poos_h{h}.pkl' for h in h_store} for id_ in [id2,id3,id4]]
         poos_shap(fl_master=fl_master, fl=fl_xgb,
                   xgb_store=[f'{id1["results_dir"]}/poos_h{h}.pkl' for h in h_store],
+                  other_xgb_store=other_xgb_store,
                   first_est_date=first_est_date,
                   results_dir=results_dir,
                   feature_info_dir=feature_info_dir)
@@ -452,4 +474,4 @@ if __name__ == '__main__':
     #selector(case=2, excel_dir='./excel/dataset_0720/CPIA1_data_loader.xlsx', var_name='poos_CPIA1_ar')
     #selector(case=3, excel_dir='./excel/dataset_0720/CPIA1_data_loader.xlsx', var_name='poos_CPIA1_ar')
     #selector(case=3.3, excel_dir='./excel/dataset_0720/CPIA1_data_loader.xlsx', var_name='poos_CPIA1_ar')
-    selector(case=7, excel_dir='./excel/dataset_0720/INDPRO_data_loader.xlsx', var_name='poos_IND_ar')
+    selector(case=2, excel_dir='./excel/dataset_0720/INDPRO_data_loader.xlsx', var_name='poos_IND_ar')
