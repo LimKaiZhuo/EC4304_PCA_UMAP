@@ -21,15 +21,16 @@ def selector(case, **kwargs):
                               yo=output[2], labels_names=output[3],
                               y=output[4], y_names=output[5],
                               time_stamp=output[6])
-        first_est_date = '2005:1'
+        first_est_date = '1970:1'
         id = create_id_dict(var_name='CPIA1',
                             h=[1, 3, 6, 12, 24],
                             est='rh',
                             model='xgb',
-                            model_name='xgbag0',
+                            model_name='xgbagnone',
                             expt='expt1',
                             combined_name=None,
-                            seed=42,)
+                            seed=42,
+                            results_dir='./results/expt1/model_combination_CPIA1')
         h_store = [1, 3, 6, 12, 24]
         h_idx_store = [0, 1, 2, 3, 4]
         for h, h_idx in zip(h_store, h_idx_store):
@@ -45,23 +46,22 @@ def selector(case, **kwargs):
             id = kwargs['id']
             levels = kwargs['levels']
         except KeyError:
-            id = create_id_dict(var_name='IND',
+            id = create_id_dict(var_name='CPIA1',
                                 h=[1, 3, 6, 12, 24],
                                 est='rh',
                                 model='xgb',
-                                model_name='xgba',
+                                model_name='xgbag1.5',
                                 expt='expt1',
                                 combined_name=None,
-                                seed=42,
-                                results_dir='./results/expt1/model_combination_CPIA1')
+                                seed=42,)
             levels = False
 
         if levels:
             levels = '_levels'
         else:
             levels = ''
-        first_est_date = '2005:1'
-        est_dates = ['2004:12']
+        first_est_date = '1970:1'
+        est_dates = [f'{x}:12' for x in range(1969, 2020, 5)[:-1]]
 
         poos_processed_data_analysis(
             save_dir_store=[f'{id["results_dir"]}/poos_{id["model"]}_h1_analysis_results{levels}.pkl',
@@ -95,17 +95,17 @@ def selector(case, **kwargs):
         Convert pickled dict of results from I(1) or I(2) based on rawdata_excel and the varname into levels.
         Then print the levels results into excel.
         '''
-        rawdata_excel = './excel/2020-07_I1.xlsx'  # _I1 for CPIA1 only! Remove that for IND and CPIA
+        rawdata_excel = './excel/2020-07_I1.xlsx'
         id = create_id_dict(var_name='CPIA1',
                             h=[1, 3, 6, 12, 24],
                             est='rh',
                             model='xgb',
-                            model_name='xgba',
-                            expt='expt1',
+                            model_name='xgbag0',
+                            expt='exptg',
                             seed=42)
 
-        first_est_date = '2005:1'
-        est_dates = ['2004:12']
+        first_est_date = '1970:1'
+        est_dates = [f'{x}:12' for x in range(1969, 2020, 5)[:-1]]
         difference_to_levels(varname='CPIAUCSL',
                              save_dir_store=[f'{id["results_dir"]}/poos_{id["model"]}_h1_analysis_results.pkl',
                                              f'{id["results_dir"]}/poos_{id["model"]}_h3_analysis_results.pkl',
@@ -474,4 +474,4 @@ if __name__ == '__main__':
     #selector(case=2, excel_dir='./excel/dataset_0720/CPIA1_data_loader.xlsx', var_name='poos_CPIA1_ar')
     #selector(case=3, excel_dir='./excel/dataset_0720/CPIA1_data_loader.xlsx', var_name='poos_CPIA1_ar')
     #selector(case=3.3, excel_dir='./excel/dataset_0720/CPIA1_data_loader.xlsx', var_name='poos_CPIA1_ar')
-    selector(case=2, excel_dir='./excel/dataset_0720/INDPRO_data_loader.xlsx', var_name='poos_IND_ar')
+    selector(case=3.3, excel_dir='./excel/dataset_0720/INDPRO_data_loader.xlsx', var_name='poos_IND_ar')
