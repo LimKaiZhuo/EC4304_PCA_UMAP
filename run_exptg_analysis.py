@@ -51,7 +51,7 @@ def selector(case, **kwargs):
                                 est='rh',
                                 model='xgb',
                                 model_name='xgbag1.5',
-                                expt='expt1',
+                                expt='exptg',
                                 combined_name=None,
                                 seed=42,)
             levels = False
@@ -100,7 +100,7 @@ def selector(case, **kwargs):
                             h=[1, 3, 6, 12, 24],
                             est='rh',
                             model='xgb',
-                            model_name='xgbag0',
+                            model_name='xgbagnone',
                             expt='exptg',
                             seed=42)
 
@@ -393,14 +393,14 @@ def selector(case, **kwargs):
 
     elif case == 6.2:
         # Plotting levels forecast.
-        var_name = 'CPIA'
-        est = [None, None, 'rh', 'rfcv', 'rh', 'rfcv']
-        model = ['ar', 'pca', 'xgb', 'xgb', 'rf', 'rf']
-        model_name = ['ar', 'pca', 'xgba', 'xgba', 'rf', 'rf']
-        seed = [None, None, 42, 42, 42, 42]
-        levels = True
+        var_name = 'CPIA1'
+        est = [None, None, None, 'rh', 'rh', 'rh', 'rh']
+        model = ['rw', 'ar', 'pca', 'xgb', 'xgb', 'xgb','xgb',]
+        model_name = ['rw','ar', 'pca', 'xgbagnone', 'xgbag-2','xgbag0','xgbag1.5',]
+        seed = [None, None, None, 42, 42, 42, 42]
+        levels = False
 
-        id_store = create_id_store(var_name=var_name, expt_type='expt1',
+        id_store = create_id_store(var_name=var_name, expt_type='exptg',
                                    est=est, model=model, model_name=model_name, seed=seed)
         if levels:
             levels = '_levels'
@@ -413,7 +413,7 @@ def selector(case, **kwargs):
                            f'{id["results_dir"]}/poos_{id["model"]}_h24_analysis_results{levels}.pkl',
                            ] for id in id_store]
         save_dir_store = [list(x) for x in zip(*save_dir_store)]
-        plot_forecasts(save_dir_store=save_dir_store, results_dir=f'./results/expt1/forecast_plots_{var_name}',
+        plot_forecasts(save_dir_store=save_dir_store, results_dir=f'./results/exptg/forecast_plots_{var_name}',
                        model_names=model_name, est_store=est,
                        h_store=id_store[0]['h'])
     elif case == 7:
@@ -474,4 +474,4 @@ if __name__ == '__main__':
     #selector(case=2, excel_dir='./excel/dataset_0720/CPIA1_data_loader.xlsx', var_name='poos_CPIA1_ar')
     #selector(case=3, excel_dir='./excel/dataset_0720/CPIA1_data_loader.xlsx', var_name='poos_CPIA1_ar')
     #selector(case=3.3, excel_dir='./excel/dataset_0720/CPIA1_data_loader.xlsx', var_name='poos_CPIA1_ar')
-    selector(case=3.3, excel_dir='./excel/dataset_0720/INDPRO_data_loader.xlsx', var_name='poos_IND_ar')
+    selector(case=6.2, excel_dir='./excel/dataset_0720/INDPRO_data_loader.xlsx', var_name='poos_IND_ar')

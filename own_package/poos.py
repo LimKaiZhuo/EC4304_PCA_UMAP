@@ -12,7 +12,7 @@ from arch.bootstrap import MCS, SPA
 from own_package.boosting import Xgboost
 from own_package.ssm import LocalLevel, SSMBase
 from own_package.others import print_df_to_excel, create_excel_file, create_results_directory, set_matplotlib_style
-import pickle, time, itertools, shap, collections
+import pickle, time, itertools, shap, collections, fnmatch
 
 first_est_date = '1970:1'
 
@@ -519,8 +519,8 @@ def poos_processed_data_analysis(results_dir, save_dir_store, h_store, model_ful
 
         if not skip:
             # Means include the categorical horizons
-            start_store = ['1970:1', '1970:1', '1970:1', '1983:1', '2007:1', '2019:12']  # Inclusive
-            end_store = ['2020:1', '2020:12', '1983:1', '2007:1', '2020:1', '2020:12']  # Exclusive of those dates
+            start_store = ['1970:1', '1970:1', '1970:1', '1984:4', '2007:1', '2019:12']  # Inclusive
+            end_store = ['2020:1', '2020:12', '1984:4', '2007:1', '2020:1', '2020:12']  # Exclusive of those dates
 
             for start, end in zip(start_store, end_store):
                 start = time_stamps.index(start)
@@ -913,14 +913,17 @@ def poos_model_evaluation(fl_master, ar_store, pca_store, xgb_stores, results_di
 
 
 def combine_poos_excel_results(excel_store, results_dir, name_store, selected_xgba, expt_type='expt1'):
-    import matplotlib as mpl
-    try:
-        del mpl.font_manager.weight_dict['roman']
-        mpl.font_manager._rebuild()
-    except KeyError:
-        pass
-    sns.set(style='ticks')
-    mpl.rc('font', family='Times New Roman')
+    set_matplotlib_style()
+
+    def get_df_for_plotting(v, col_names, selected_col):
+        v = v[[x for y in selected_col for x in v.columns if
+               fnmatch.fnmatch(f'{x[0]}_{x[1]}', y)]]
+        v.columns = col_names
+        v = v.drop(v.index[-3])  # drop -3 to remove COVID only months
+        v.index = v.index.values.tolist()[:-7] + ['Full less COVID', 'Full', 'Pre-Great Moderation',
+                                                  'Great Moderation', 'Post-Great Moderation', 'Expansionary',
+                                                  'Recessionary']
+        return v
 
     data_store = {f'h{x}': [] for x in [1, 3, 6, 12, 24]}
     for idx, (excel_dir, name) in enumerate(zip(excel_store, name_store)):
@@ -940,7 +943,6 @@ def combine_poos_excel_results(excel_store, results_dir, name_store, selected_xg
         wb.create_sheet(k)
         ws = wb[k]
         v = pd.concat(v, axis=1)
-
         print_df_to_excel(df=v, ws=ws)
     wb.save(excel_name)
     new_index = [f'{x}~{y}' for x, y in zip(v['start_dates'], v['end_dates'])]
@@ -960,30 +962,38 @@ def combine_poos_excel_results(excel_store, results_dir, name_store, selected_xg
         v.columns = pd.MultiIndex.from_tuples([(x, y.replace('_rmse', '')) for x, y in v.columns])
         v.to_excel(writer, sheet_name=f'{k}_rmse')
 
-        # Selected xgba columns with ar, pca, rf.
+        # Selected xgba columns with rw, ar, pca, rf.
         v = v.drop([(model, variant) for model, variant in v.columns if
                     'xgba' in model and not variant in selected_xgba], axis=1)
         v.to_excel(writer, sheet_name=f'{k}_rmse_sel')
 
-        # Relative to AR
+        # Relative to RW
+        v_abs = v.copy()
         v[v.columns[1:]] = v[v.columns[1:]] / v[[v.columns[0]]].values
         v.to_excel(writer, sheet_name=f'{k}_rel_rmse_sel')
 
         if expt_type == 'poos':
             # Plotting relative RMSE against blocks
             # v = v[[x for x in v.columns if any(y in x for y in ['pca', 'rw', 'rf'])]]
-            v = v[[x for y in ['pca', 'xgba(rh)_rw', 'rf(rh)_rf'] for x in v.columns if f'{x[0]}_{x[1]}'.endswith(y)]]
-            v.columns = ['PCA', 'XGBA(rh)_rw', 'RF(rh)']
-            v = v.drop(v.index[-3])
-            v.index = v.index.values.tolist()[:-7] + ['Full less COVID', 'Full', 'Pre-Great Moderation',
-                                                      'Great Moderation', 'Post-Great Moderation', 'Expansionary',
-                                                      'Recessionary']
-            v.plot.bar()
+            v = get_df_for_plotting(v, col_names=['AR', 'PCA', 'XGBA(rh)_rw', 'RF(rh)'],
+                                    selected_col=['ar_ar', 'pca_pca', 'xgba(rh, *)_rw', 'rf(rh, *)_rf'])
+            v_abs = get_df_for_plotting(v_abs, col_names=['RW'],
+                                    selected_col=['rw_rw'])
+
+            fig, ax1 = plt.subplots()
+            v.plot.bar(ax=ax1)
+            ax1.set_ylabel('Relative RMSE against RW', size=10)
             plt.axvspan(10 - 0.5, v.shape[0], facecolor='grey', alpha=0.2)
             if '1' in k and '2' not in k:
                 plt.legend(loc=2)
             else:
                 plt.legend('')
+
+            ax2 = ax1.twinx()
+            ax2.plot(v_abs.values, alpha=0.35, color='black')
+            ax2.set_ylabel('RW RMSE', size=10)
+
+
             plt.savefig(f'{results_dir}/{k}_bar.png', bbox_inches='tight')
             plt.close()
 
@@ -1034,6 +1044,7 @@ class Shap_data:
             self.grouped_df.index = ts_index
 
     def add_feature_info(self, feature_info_df, h):
+        '''
         df = {}
         for item in self.shap_abs.iteritems():
             info = feature_info_df[feature_info_df['Name'] == item[0][0]].squeeze().to_dict()
@@ -1047,6 +1058,7 @@ class Shap_data:
         df = pd.DataFrame.from_dict(df, orient='index')
         df['h'] = h
         self.feature_info_df = df
+        '''
 
         multi_column = [
             (var, feature_info_df['Group'].loc[feature_info_df['Name'] == var].values[0]) if not var == 'y' else (
@@ -1066,7 +1078,7 @@ def poos_shap(fl_master, fl, xgb_store, first_est_date, results_dir, feature_inf
     idx = fl_master.time_stamp.index(first_est_date)
     ts = fl_master.time_stamp[idx:]
     info_df = {}
-    fi_df_store = []
+    # fi_df_store = []
 
     def get_top_columns_per_row(df, n_top):
         ranked_matrix = np.argsort(-df.values, axis=1)[:, :n_top]
@@ -1098,7 +1110,7 @@ def poos_shap(fl_master, fl, xgb_store, first_est_date, results_dir, feature_inf
         for date, v in poos_data_store.items():
             if date == first_est_date:
                 continue
-            sd = Shap_data(v['data']['shap_values'].toarray(), poos_data_store[date]['feature_names'])
+            sd = Shap_data(v['data']['shap_values'].toarray()[[-1],:], poos_data_store[date]['feature_names'])
             sd.add_feature_data(fl_master, fl, hparams=v['hparam'], h=h,
                                 ts=date, update_ts_only=True,
                                 expected_value=v['data']['expected_value'])
@@ -1107,19 +1119,53 @@ def poos_shap(fl_master, fl, xgb_store, first_est_date, results_dir, feature_inf
 
         return pd.concat(grouped_df, axis=0)
 
-    def norm_grouped_df_plotting(grouped_df, name='finalmodel'):
+    def get_grouped_df_for_poos(xgb_data):
+        poos_data_store = dict(zip(ts, [x for blocks in xgb_data for x in blocks['poos_data_store']]))
+        est_data_store = {k: v for k, v in poos_data_store.items() if k in est_dates}
+        hparam_store = [data['hparams_df'].iloc[0, :] for data in xgb_data + [xgb_data[-1]]]
+        grouped_df = []
+        est_previous = None
+        for (est, data), hparam in zip(est_data_store.items(), hparam_store):
+            try:
+                feature_names = data['feature_names']
+            except KeyError:
+                # feature name is not in dict for the 2020:1 data dict. But the feature name would had been
+                # defined in 2015:1 which will mean it is ok
+                pass
+            sd = Shap_data(data['shap_values'].toarray(), feature_names)
+            sd.add_feature_data(fl_master, fl, hparams=hparam, h=h, ts=est,
+                                expected_value=data['expected_value'], update_ts_only=True)
+            sd.add_feature_info(feature_info_df, h=h)
+            if est_previous:
+                temp_df = sd.grouped_df.iloc[sd.grouped_df.index.get_loc(est_previous) + 1:, :]
+            else:
+                temp_df = sd.grouped_df
+            index = [(idx, est) for idx in temp_df.index]
+            temp_df.index = pd.MultiIndex.from_tuples(index)
+            grouped_df.append(temp_df.copy())
+            est_previous = est
+
+        return pd.concat(grouped_df, axis=0)
+
+    def norm_grouped_df_plotting(grouped_df, name='finalmodel', expt_type='expt1'):
+        if expt_type == 'poos':
+            grouped_df.index = grouped_df.index.get_level_values(0)
         norm_grouped_df = grouped_df.div(grouped_df.sum(axis=1), axis=0)
 
-        '''
-        # AR Plot
-        grouped_df.columns = grouped_df.columns.get_level_values(0)
-        grouped_df['y'].rolling(12).mean().plot()
-        plt.show()
+        # Scatter plot for Pre-GM and GM
+        ts_gm = norm_grouped_df.index.get_loc('1984:4')
+        ts_postgm = norm_grouped_df.index.get_loc('2007:1')
+        temp_df = pd.concat([norm_grouped_df.iloc[:ts_gm,:].mean(axis=0), norm_grouped_df.iloc[ts_gm:ts_postgm,:].mean(axis=0)], axis=1).reset_index()
+        temp_df.columns = ['Feature Name', 'Group', 'Pre-Great Moderation', 'Great Moderation']
+        ax=sns.scatterplot(data=temp_df, x='Pre-Great Moderation', y='Great Moderation', hue='Group', s=20)
+        handles, labels = ax.get_legend_handles_labels()
+        ax.legend(handles=handles[1:], labels=labels[1:], fontsize=8.5)
+        sns.despine()
+        plt.savefig(f'{results_dir}/h{h}_{name}_scatterplot.png', bbox_inches='tight')
         plt.close()
-        '''
 
         # Stacked area plot for SHAP vs time with hue=Groups
-        norm_grouped_df.groupby(level=1, axis=1).sum().rolling(12).mean().plot.area().legend(
+        norm_grouped_df.groupby(level=1, axis=1).sum().rolling(12, min_periods=1).mean().plot.area().legend(
             loc='center left', bbox_to_anchor=(1, 0.5))
         fig = plt.gcf()
         fig.set_size_inches(10, 4)
@@ -1150,58 +1196,18 @@ def poos_shap(fl_master, fl, xgb_store, first_est_date, results_dir, feature_inf
         with open(xgb_dir, 'rb') as handle:
             xgb_data = pickle.load(handle)
 
-        poos_data_store = dict(zip(ts, [x for blocks in xgb_data for x in blocks['poos_data_store']]))
-
         if est_dates:
             # [f'{x}:1' for x in range(1970, 2020, 5)] + ['2020:6']
-            est_data_store = {k: v for k, v in poos_data_store.items() if k in est_dates}
-            hparam_store = [data['hparams_df'].iloc[0, :] for data in xgb_data + [xgb_data[-1]]]
-            grouped_df = []
-            est_previous = None
-            for (est, data), hparam in zip(est_data_store.items(), hparam_store):
-                try:
-                    feature_names = data['feature_names']
-                except KeyError:
-                    # feature name is not in dict for the 2020:1 data dict. But the feature name would had been
-                    # defined in 2015:1 which will mean it is ok
-                    pass
-                sd = Shap_data(data['shap_values'].toarray(), feature_names)
-                sd.add_feature_data(fl_master, fl, hparams=hparam, h=h, ts=est,
-                                    expected_value=data['expected_value'], update_ts_only=True)
-                sd.add_feature_info(feature_info_df, h=h)
-                if est_previous:
-                    temp_df = sd.grouped_df.iloc[sd.grouped_df.index.get_loc(est_previous) + 1:, :]
-                else:
-                    temp_df = sd.grouped_df
-                index = [(idx, est) for idx in temp_df.index]
-                temp_df.index = pd.MultiIndex.from_tuples(index)
-                grouped_df.append(temp_df.copy())
-                est_previous = est
-
-            grouped_df = pd.concat(grouped_df, axis=0)
-            norm_grouped_df = grouped_df.div(grouped_df.sum(axis=1), axis=0)
-
-            # Stacked area plot for SHAP vs time with hue=Groups
-            norm_grouped_df.groupby(level=1, axis=1).sum().groupby(level=1, axis=0).mean().plot.area().legend(
-                loc='center left', bbox_to_anchor=(1, 0.5))
-            fig = plt.gcf()
-            fig.set_size_inches(10, 4)
-            sns.despine()
-            plt.xlim(xmin=0)
-            plt.ylabel('Normalized Grouped |SHAP|')
-            plt.savefig(f'{results_dir}/h{h}_stackedplot.png', bbox_inches='tight')
-            plt.close()
-
-            # Joyplot for Distribution of SHAP values across time averaged in 11 blocks
-            temp_df = norm_grouped_df.groupby(level=1, axis=0).mean().reset_index().rename(
-                columns={'index': 'Date'}).melt(id_vars='Date', var_name=['Var', 'Group'],
-                                                value_name='|SHAP|')
-            fig, axes = joypy.joyplot(temp_df, by="Date", column="|SHAP|", labels=temp_df['Date'].iloc[:11],
-                                      range_style='all', hist=True, x_range=[0, 0.1], fade=True,
-                                      grid="y", linewidth=1, legend=False, figsize=(6, 6), colormap=cm.plasma,
-                                      bins=30)
-            plt.savefig(f'{results_dir}/h{h}_joyplot.png', bbox_inches='tight')
-            plt.close()
+            grouped_df = get_grouped_df(xgb_data=xgb_data, first_est_date=first_est_date, ts_index=ts)
+            norm_grouped_df_plotting(grouped_df.copy(), 's42', expt_type='poos')
+            if other_xgb_store:
+                grouped_df_store = [grouped_df.copy()]
+                for other_xgb_dict in other_xgb_store:
+                    with open(other_xgb_dict[h], 'rb') as handle:
+                        other_xgb_data = pickle.load(handle)
+                    grouped_df_store.append(get_grouped_df(other_xgb_data, first_est_date=first_est_date, ts_index=ts))
+                grouped_df = pd.concat(grouped_df_store, axis=0).groupby(axis=0, level=0).mean()
+                norm_grouped_df_plotting(grouped_df, 'averaged', expt_type='poos')
 
         shap_abs = []
         grouped_shap_abs = []
@@ -1259,9 +1265,9 @@ def poos_shap(fl_master, fl, xgb_store, first_est_date, results_dir, feature_inf
             plt.savefig(f'{results_dir}/h{h}_{date.replace(":", "_")}_forceplot.png', bbox_inches='tight')
             plt.close()
 
-            if date == '2020:6':
+            if date == '2020:6' and not est_dates:
                 sd.add_feature_info(feature_info_df, h=h)
-                fi_df_store.append(sd.feature_info_df)
+                # fi_df_store.append(sd.feature_info_df)
 
                 grouped_df = get_grouped_df(xgb_data, first_est_date, fl_master.time_stamp[idx:])
                 norm_grouped_df_plotting(grouped_df, 's42')
@@ -1275,17 +1281,20 @@ def poos_shap(fl_master, fl, xgb_store, first_est_date, results_dir, feature_inf
                     grouped_df = pd.concat(grouped_df_store, axis=0).groupby(axis=0, level=0).mean()
                     norm_grouped_df_plotting(grouped_df=grouped_df, name='s42,100,200,300')
 
-    fi_df = pd.concat(fi_df_store, axis=0)
-    fi_df['|SHAP|'] = fi_df[['|SHAP|', 'h']].groupby('h').transform(lambda x: x / (x.sum()))
+    '''
+    if not est_dates:
+        fi_df = pd.concat(fi_df_store, axis=0)
+        fi_df['|SHAP|'] = fi_df[['|SHAP|', 'h']].groupby('h').transform(lambda x: x / (x.sum()))
 
-    sns.barplot(x='h', y='|SHAP|', hue='Group', data=fi_df.groupby(['h', 'Group']).sum().reset_index())
-    plt.legend(ncol=2)
-    plt.savefig(f'{results_dir}/group_SHAP.png')
+        sns.barplot(x='h', y='|SHAP|', hue='Group', data=fi_df.groupby(['h', 'Group']).sum().reset_index())
+        plt.legend(ncol=2)
+        plt.savefig(f'{results_dir}/group_SHAP.png')
 
-    temp = fi_df.groupby('h').apply(lambda x: x.nlargest(7, columns='|SHAP|')).reset_index(1)
-    temp.index = list(np.arange(1, 8)) * 5
-    ws = wb['Sheet']
-    print_df_to_excel(df=temp, ws=ws)
+        temp = fi_df.groupby('h').apply(lambda x: x.nlargest(7, columns='|SHAP|')).reset_index(1)
+        temp.index = list(np.arange(1, 8)) * 5
+        ws = wb['Sheet']
+        print_df_to_excel(df=temp, ws=ws)
+    '''
 
     df = pd.DataFrame.from_dict(info_df).T
     wb.create_sheet('info')
