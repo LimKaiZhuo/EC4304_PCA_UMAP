@@ -2,19 +2,8 @@ from own_package.boosting import run_testing
 from own_package.poos import poos_analysis, poos_processed_data_analysis, poos_experiment, poos_model_evaluation, \
     poos_shap, poos_analysis_combining_xgb, poos_xgb_plotting_m, combine_poos_excel_results
 from own_package.features_labels import read_excel_dataloader, Fl_master, Fl_ar, Fl_pca, Fl_xgb
-from own_package.others import create_results_directory, create_id_dict
-from own_package.postprocess import difference_to_levels
-
-
-class A(object):  # deriving from 'object' declares A as a 'new-style-class'
-    def foo(self):
-        print('foo')
-
-
-class B(A):
-    def doo(self):
-        super().foo()  # calls 'A.foo()'
-        print('du')
+from own_package.others import create_results_directory, create_id_dict, create_id_store
+from own_package.postprocess import difference_to_levels, combine_poos_analysis
 
 
 def selector(case, **kwargs):
@@ -31,10 +20,10 @@ def selector(case, **kwargs):
         id = create_id_dict(var_name='CPIA1',
                             h=[1, 3, 6, 12, 24],
                             est='rh',
-                            model='xgba',
-                            model_name='xgb',
+                            model='rf',
+                            model_name='rf',
                             expt='poos',
-                            seed=100)
+                            seed=42)
         h_store = [1, 3, 6, 12, 24]
         h_idx_store = [0, 1, 2, 3, 4]
         for h, h_idx in zip(h_store, h_idx_store):
@@ -46,10 +35,10 @@ def selector(case, **kwargs):
         id = create_id_dict(var_name='CPIA1',
                             h=[1, 3, 6, 12, 24],
                             est='rh',
-                            model='xgba',
-                            model_name='xgb',
+                            model='xgb',
+                            model_name='xgba',
                             expt='poos',
-                            seed=42)
+                            seed='42,100,200')
 
         first_est_date = '1970:1'
         est_dates = [f'{x}:12' for x in range(1969, 2020, 5)[:-1]]
@@ -104,7 +93,7 @@ def selector(case, **kwargs):
                             model='xgb',
                             model_name='xgba',
                             expt='poos',
-                            seed=42)
+                            seed=100)
 
         first_est_date = '1970:1'
         est_dates = [f'{x}:12' for x in range(1969, 2020, 5)[:-1]]
@@ -141,10 +130,10 @@ def selector(case, **kwargs):
                           ['rw', 'll*ln', 'llt*ln'], ])
     elif case == 4:
         # Settings
-        var_name = 'CPIA1'  # CPIA or CPIA1 or IND
-        full_var_name = 'CPIAUCSL'  # CPIAUCSL or INDPRO
-        excel_dir = './excel/dataset_0720/CPIA1_data_loader.xlsx'
-        rawdata_excel = './excel/2020-07_I1.xlsx'  # _I1 for CPIA1 only! Remove that for IND and CPIA
+        var_name = 'IND'  # CPIA or CPIA1 or IND
+        full_var_name = 'INDPRO'  # CPIAUCSL or INDPRO
+        excel_dir = './excel/dataset_0720/INDPRO_data_loader.xlsx'
+        rawdata_excel = './excel/2020-07.xlsx'  # _I1 for CPIA1 only! Remove that for IND and CPIA
 
         # Run poos experiment for rw or ar or pca
         def run_basic(model_mode, fl_master, results_dir):
@@ -290,6 +279,65 @@ def selector(case, **kwargs):
                                                 ['rw', 'll*ln', 'llt*ln'],
                                                 ]
                                   )
+    elif case == 6:
+        # Combine rmse excel together into 1 excel file
+        var_name = 'CPIA1'
+        levels = False
+        id1 = create_id_dict(var_name=var_name,
+                             h=[1, 3, 6, 12, 24],
+                             est='rh',
+                             model='xgb',
+                             model_name='xgba',
+                             expt='poos',
+                             seed='42,100,200')
+        id2 = create_id_dict(var_name=var_name,
+                             h=[1, 3, 6, 12, 24],
+                             est='rh',
+                             model='rf',
+                             model_name='rf',
+                             expt='poos',
+                             seed=42)
+        id3 = create_id_dict(var_name=var_name,
+                             h=[1, 3, 6, 12, 24],
+                             est='rh',
+                             model='xgb',
+                             model_name='xgba',
+                             expt='poos',
+                             seed='42,100,200')
+        id_store = [id1,  id2]  # id5, id6, id7, id8, id9, id10, id11, id12]  # ]
+
+
+        if levels:
+            levels = '_levels'
+        else:
+            levels = ''
+        excel_store = [f'./results/poos/poos_{var_name}_rw/poos_analysis_rw{levels}.xlsx',
+                       f'./results/poos/poos_{var_name}_ar/poos_analysis_ar{levels}.xlsx',
+                       f'./results/poos/poos_{var_name}_pca/poos_analysis_pca{levels}.xlsx', ] + \
+                      [f'{x["results_dir"]}/poos_analysis_{x["model_full_name"]}{levels}.xlsx' for x in id_store]
+        name_store = ['rw', 'ar', 'pca'] + [f'{x["model_name"]}({x["est"]}, s{x["seed"]})' for x in id_store]
+        combine_poos_excel_results(excel_store=excel_store, results_dir=f'./results/poos/a_combinations/{var_name}',
+                                   name_store=name_store, expt_type='poos',
+                                   selected_xgba=['oracle', 'hparam', 'rw', 'll', 'll*ln', 'rw+ll*ln'])
+    elif case == 6.1:
+        # Combining hXX analysis results pkl from different models into one via simple averaging
+        combined_name = 'c'
+        var_name = 'CPIA1'
+        seed = [42,100, 200,]
+        est = ['rh'] * len(seed)
+        model = ['xgb'] * len(seed)
+        model_name = ['xgba'] * len(seed)
+        levels = False
+
+        id_store = create_id_store(var_name=var_name, expt_type='poos',
+                                   est=est, model=model, model_name=model_name, seed=seed)
+
+        results_dir = create_results_directory(f'./results/poos/model_combination_{var_name}_{combined_name}')
+        combine_poos_analysis(results_dir=results_dir, dir_store=[x['results_dir'] for x in id_store],
+                              levels=levels, combined_name=combined_name)
+        est = est[-1]
+
+
     elif case == 7:
         # SHAP plots
         h_store = [1, 3, 6, 12, 24]
@@ -303,7 +351,21 @@ def selector(case, **kwargs):
                              model_name='xgba',
                              expt='poos',
                              seed=42)
-        results_dir = create_results_directory('./results/poos/shap_{}'.format(var_name))
+        id2 = create_id_dict(var_name=var_name,
+                             h=[1, 3, 6, 12, 24],
+                             est='rh',
+                             model='xgb',
+                             model_name='xgba',
+                             expt='poos',
+                             seed=100)
+        id3 = create_id_dict(var_name=var_name,
+                             h=[1, 3, 6, 12, 24],
+                             est='rh',
+                             model='xgb',
+                             model_name='xgba',
+                             expt='poos',
+                             seed=200)
+        results_dir = create_results_directory('./results/poos/a_SHAP/shap_{}'.format(var_name))
         output = read_excel_dataloader(excel_dir=excel_dir)
         fl_master = Fl_master(x=output[0], features_names=output[1],
                               yo=output[2], labels_names=output[3],
@@ -314,14 +376,16 @@ def selector(case, **kwargs):
                         features_names=fl_master.features_names, labels_names=fl_master.labels_names,
                         y_names=fl_master.y_names)
         first_est_date = '1970:1'
+        other_xgb_store = [{h: f'{id_["results_dir"]}/poos_h{h}.pkl' for h in h_store} for id_ in [id2, id3]]
         poos_shap(fl_master=fl_master, fl=fl_xgb,
                   xgb_store=[f'{id1["results_dir"]}/poos_h{h}.pkl' for h in h_store],
                   first_est_date=first_est_date,
                   results_dir=results_dir,
                   feature_info_dir=feature_info_dir,
-                  est_dates=[f'{x}:1' for x in range(1970, 2020, 5)] + ['2020:6'])
+                  est_dates=[f'{x}:1' for x in range(1970, 2020, 5)] + ['2020:6'],
+                  other_xgb_store=other_xgb_store)
 
 
 if __name__ == '__main__':
-    #selector(case=7, excel_dir='./excel/dataset_0720/INDPRO_data_loader.xlsx', var_name='poos_IND_ar')
-    selector(case=4)
+    # selector(case=7, excel_dir='./excel/dataset_0720/INDPRO_data_loader.xlsx', var_name='poos_IND_ar')
+    selector(case=7)

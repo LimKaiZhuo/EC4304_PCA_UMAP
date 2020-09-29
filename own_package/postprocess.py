@@ -4,7 +4,7 @@ import math, random
 import cvxpy as cp
 import openpyxl, pickle, collections
 import matplotlib.pyplot as plt
-import os
+import os, fnmatch
 from openpyxl.utils.dataframe import dataframe_to_rows
 from own_package.dm_test import dm_test
 from own_package.others import create_excel_file, create_results_directory
@@ -82,26 +82,39 @@ def plot_forecasts(save_dir_store, results_dir, model_names, est_store, h_store)
             if idx == 0:
                 df = data_df[[f'y_{h}']]
 
-            if model_name in ['ar', 'pca']:
+            if model_name in ['rw', 'ar', 'pca']:
                 df = pd.concat((df, data_df[[f'{model_name}_ehat']]), axis=1)
-            elif model_name == 'xgba':
-                df = pd.concat((df, data_df[[f'rw_ehat']].rename(columns={'rw_ehat':f'xgba_rw_{est}_ehat'}, inplace=False)), axis=1)
+            elif 'xgba' in model_name:
+                df = pd.concat((df, data_df[[f'rw_ehat']].rename(columns={'rw_ehat':f'{model_name}_rw_{est}_ehat'}, inplace=False)), axis=1)
             elif model_name == 'rf':
                 df = pd.concat((df, data_df[[f'rf_ehat']].rename(columns={'rf_ehat':f'rf_{est}_ehat'}, inplace=False)), axis=1)
 
 
         ax = df[[x for x in df.columns if '_ehat' in x]].plot(lw=0.5)
         ax.ylabel = 'ehat'
-        plt.savefig(f'{results_dir}/{h}_ehat_all.png')
+        plt.savefig(f'{results_dir}/{h}_ehat_all.png', bbox_inches='tight')
         plt.close()
 
         ax = df[[x for x in df.columns if any([y in x for y in ['ar', 'pca', 'rw_rh']])]].plot(lw=0.5)
         ax.ylabel = 'ehat'
-        plt.savefig(f'{results_dir}/{h}_ehat_arpcaxgbarwrh.png')
+        plt.savefig(f'{results_dir}/{h}_ehat_arpcaxgbarwrh.png', bbox_inches='tight')
         plt.close()
 
+        df = df[[x for x in df.columns if '_ehat' in x]]
+        df.columns = [x.partition('_ehat')[0] for x in df.columns]
+        df_temp = df.pow(2).rolling(12, min_periods=1).apply(lambda x: np.sqrt(x.mean()))
+        ax = df_temp.plot(lw=0.5)
+        plt.savefig(f'{results_dir}/{h}_rolling_rmse.png', bbox_inches='tight')
+        plt.close()
 
+        ax = df_temp.drop(['rw', 'ar', 'pca'],axis=1).plot(lw=0.5)
+        plt.savefig(f'{results_dir}/{h}_xgb_rolling_rmse.png', bbox_inches='tight')
+        plt.close()
 
+        ax = df_temp.drop(['rw', 'ar', 'pca'], axis=1).divide(df_temp.drop(['rw', 'ar', 'pca'], axis=1).sum(axis=1),
+                                                              axis=0).plot.area(lw=0.5)
+        plt.savefig(f'{results_dir}/{h}_xgb_rolling_rmse_stackedplot.png', bbox_inches='tight')
+        plt.close()
     pass
 
 
