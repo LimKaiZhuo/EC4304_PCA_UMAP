@@ -1067,7 +1067,7 @@ class Shap_data:
 
 
 def poos_shap(fl_master, fl, xgb_store, first_est_date, results_dir, feature_info_dir, est_dates=None,
-              other_xgb_store=None):
+              other_xgb_store=None, side_expt=None):
     set_matplotlib_style()
 
     feature_info_df = pd.read_excel(feature_info_dir, index_col=0)
@@ -1147,10 +1147,23 @@ def poos_shap(fl_master, fl, xgb_store, first_est_date, results_dir, feature_inf
 
         return pd.concat(grouped_df, axis=0)
 
-    def norm_grouped_df_plotting(grouped_df, name='finalmodel', expt_type='expt1'):
+    def norm_grouped_df_plotting(grouped_df, name='finalmodel', expt_type='expt1', side_expt=None):
         if expt_type == 'poos':
             grouped_df.index = grouped_df.index.get_level_values(0)
         norm_grouped_df = grouped_df.div(grouped_df.sum(axis=1), axis=0)
+
+        # side_experiments
+        if 'oildub' in side_expt:
+            temp_df = norm_grouped_df[[x for x in norm_grouped_df.columns.values if 'OILPRICEx' in x[0]]]
+            side_expt['oildub'][h] = temp_df.sum(axis=0)
+            temp_df.rolling(12, min_periods=1).mean().plot.area().legend(loc='center left', bbox_to_anchor=(1, 0.5))
+            plt.ylabel('Normalized Grouped |SHAP|')
+            plt.savefig(f'{results_dir}/h{h}_{name}_oilplot.png', bbox_inches='tight')
+            plt.close()
+        elif 'house' in side_expt:
+            temp_df = norm_grouped_df[[x for x in norm_grouped_df.columns.values if 'Housing' in x[1]]]
+
+
 
         # Scatter plot for Pre-GM and GM
         ts_gm = norm_grouped_df.index.get_loc('1984:4')
@@ -1199,7 +1212,7 @@ def poos_shap(fl_master, fl, xgb_store, first_est_date, results_dir, feature_inf
         if est_dates:
             # [f'{x}:1' for x in range(1970, 2020, 5)] + ['2020:6']
             grouped_df = get_grouped_df(xgb_data=xgb_data, first_est_date=first_est_date, ts_index=ts)
-            norm_grouped_df_plotting(grouped_df.copy(), 's42', expt_type='poos')
+            norm_grouped_df_plotting(grouped_df.copy(), 's42', expt_type='poos', side_expt=side_expt)
             if other_xgb_store:
                 grouped_df_store = [grouped_df.copy()]
                 for other_xgb_dict in other_xgb_store:
@@ -1207,7 +1220,7 @@ def poos_shap(fl_master, fl, xgb_store, first_est_date, results_dir, feature_inf
                         other_xgb_data = pickle.load(handle)
                     grouped_df_store.append(get_grouped_df(other_xgb_data, first_est_date=first_est_date, ts_index=ts))
                 grouped_df = pd.concat(grouped_df_store, axis=0).groupby(axis=0, level=0).mean()
-                norm_grouped_df_plotting(grouped_df, 'averaged', expt_type='poos')
+                norm_grouped_df_plotting(grouped_df, 'averaged', expt_type='poos', side_expt=side_expt)
 
         shap_abs = []
         grouped_shap_abs = []
@@ -1300,5 +1313,13 @@ def poos_shap(fl_master, fl, xgb_store, first_est_date, results_dir, feature_inf
     wb.create_sheet('info')
     ws = wb['info']
     print_df_to_excel(ws=ws, df=df)
+
+    if 'oildub' in side_expt:
+        wb.create_sheet('oildub')
+        ws = wb['oildub']
+        temp_df = pd.DataFrame(side_expt['oildub']).T
+        temp_df.columns = temp_df.columns.get_level_values(0)
+        print_df_to_excel(ws=ws, df=temp_df)
+
     wb.save(excel_name)
     wb.close()
