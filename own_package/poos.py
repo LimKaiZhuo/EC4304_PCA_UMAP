@@ -14,8 +14,6 @@ from own_package.ssm import LocalLevel, SSMBase
 from own_package.others import print_df_to_excel, create_excel_file, create_results_directory, set_matplotlib_style
 import pickle, time, itertools, shap, collections, fnmatch
 
-first_est_date = '1970:1'
-
 
 def forecast_error(y_predicted, y_true):
     return 'ehat', np.sum(y_true.get_label() - y_predicted)
@@ -1008,7 +1006,8 @@ class Shap_data:
         df.index = pd.MultiIndex.from_tuples(df.index.str.split('_L').tolist())
         self.feature_names = feature_names
         self.df = df.T  # Change back to multi-column
-        self.grouped_df = self.df.abs().sum(level=0, axis=1)
+        self.grouped_df = self.df.sum(level=0, axis=1)
+        #self.grouped_df = self.df.abs().sum(level=0, axis=1)
         self.shap_abs = self.df.abs().sum(axis=0)
         self.grouped_shap_abs = self.grouped_df.sum(axis=0)
         if ts_index:
@@ -1081,6 +1080,7 @@ def poos_shap(fl_master, fl, xgb_store, first_est_date, results_dir, feature_inf
     # fi_df_store = []
 
     def get_top_columns_per_row(df, n_top):
+        n_top = min(n_top, df.shape[1])
         ranked_matrix = np.argsort(-df.values, axis=1)[:, :n_top]
         return pd.DataFrame(df.columns.values[ranked_matrix],
                             index=df.index,
@@ -1163,8 +1163,6 @@ def poos_shap(fl_master, fl, xgb_store, first_est_date, results_dir, feature_inf
         elif 'house' in side_expt:
             temp_df = norm_grouped_df[[x for x in norm_grouped_df.columns.values if 'Housing' in x[1]]]
 
-
-
         # Scatter plot for Pre-GM and GM
         ts_gm = norm_grouped_df.index.get_loc('1984:4')
         ts_postgm = norm_grouped_df.index.get_loc('2007:1')
@@ -1176,6 +1174,7 @@ def poos_shap(fl_master, fl, xgb_store, first_est_date, results_dir, feature_inf
         sns.despine()
         plt.savefig(f'{results_dir}/h{h}_{name}_scatterplot.png', bbox_inches='tight')
         plt.close()
+
 
         # Stacked area plot for SHAP vs time with hue=Groups
         norm_grouped_df.groupby(level=1, axis=1).sum().rolling(12, min_periods=1).mean().plot.area().legend(
@@ -1203,6 +1202,9 @@ def poos_shap(fl_master, fl, xgb_store, first_est_date, results_dir, feature_inf
                                   colormap=cm.autumn_r)
         plt.savefig(f'{results_dir}/h{h}_{name}_ridgelineplot.png', bbox_inches='tight')
         plt.close()
+
+
+
 
 
     for xgb_dir, h in zip(xgb_store, [1, 3, 6, 12, 24]):

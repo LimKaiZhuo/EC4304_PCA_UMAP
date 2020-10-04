@@ -32,13 +32,13 @@ def selector(case, **kwargs):
                           first_est_date=first_est_date,
                           save_dir=f'{id["results_dir"]}/poos_h{h}.pkl')
     elif case == 3:
-        id = create_id_dict(var_name='CPIA1',
+        id = create_id_dict(var_name='IND',
                             h=[1, 3, 6, 12, 24],
                             est='rh',
                             model='xgb',
                             model_name='xgba',
                             expt='poos',
-                            seed='42,100,200')
+                            seed='200')
 
         first_est_date = '1970:1'
         est_dates = [f'{x}:12' for x in range(1969, 2020, 5)[:-1]]
@@ -281,7 +281,7 @@ def selector(case, **kwargs):
                                   )
     elif case == 6:
         # Combine rmse excel together into 1 excel file
-        var_name = 'CPIA1'
+        var_name = 'IND'
         levels = False
         id1 = create_id_dict(var_name=var_name,
                              h=[1, 3, 6, 12, 24],
@@ -322,7 +322,7 @@ def selector(case, **kwargs):
     elif case == 6.1:
         # Combining hXX analysis results pkl from different models into one via simple averaging
         combined_name = 'c'
-        var_name = 'CPIA1'
+        var_name = 'IND'
         seed = [42,100, 200,]
         est = ['rh'] * len(seed)
         model = ['xgb'] * len(seed)
