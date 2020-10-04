@@ -403,15 +403,14 @@ class Fl_pca(Fl_master):
         loadings = pca.components_.T * math.sqrt(self.N)
         factors = x @ loadings / self.N
         '''
-        #T, N = x.shape
-        #w, v = eigh(x.T @ x)
-        #loadings = np.fliplr(v[:, -r:])
-        #loadings = loadings * math.sqrt(N)
-        #factors = x @ loadings / N
-        #loadings_T = loadings.T
+        # T, N = x.shape
+        # w, v = eigh(x.T @ x)
+        # loadings = np.fliplr(v[:, -r:])
+        # loadings = loadings * math.sqrt(N)
+        # factors = x @ loadings / N
+        # loadings_T = loadings.T
 
         pc = SMPCA(x, ncomp=r)
-
 
         '''
         w, v = eigh(x @ x.T)
@@ -469,7 +468,6 @@ class Fl_pca(Fl_master):
         ff = factors[a - 1:T - h, :]
         fy = yo[a - 1:T - h, :]
 
-
         if m >= 2:
             for idx in range(2, m + 1):
                 ff = np.concatenate((ff, factors[a - idx + 1 - 1:T - h - idx + 1, :]), axis=1)
@@ -525,7 +523,7 @@ class Fl_pca(Fl_master):
             f_t = np.concatenate((f_t, np.zeros((1, f_t.shape[1]))), axis=0)
 
             # f_t, _ = factor_model(x=x_t, r=r) SHOULD NOT RE-ESTIMATE FACTORS BEFORE FORECASTING
-            f_LM_t, yo_LM_t, y_RO_t= self.pca_umap_prepare_data_matrix(f_t, yo_t, y_t, h, m, p)
+            f_LM_t, yo_LM_t, y_RO_t = self.pca_umap_prepare_data_matrix(f_t, yo_t, y_t, h, m, p)
             exog = np.concatenate((f_LM_t, yo_LM_t), axis=1)[-1, :][None, ...]
 
             y_1_hat = ols_model.predict(exog=np.concatenate((np.ones((1, 1)), exog), axis=1))
@@ -611,10 +609,10 @@ class Fl_pca(Fl_master):
         p_store = list(range(1, p_max + 1))
         hparams_store = list(itertools.product(m_store, p_store))
         aic_store = []
-        for (m,p) in hparams_store:
-            aic_store.append(calculate_aic(x,yo,y,r,m,p))
+        for (m, p) in hparams_store:
+            aic_store.append(calculate_aic(x, yo, y, r, m, p))
 
-        df = pd.DataFrame(data=np.concatenate((np.array(hparams_store), np.array(aic_store)[...,None]), axis=1),
+        df = pd.DataFrame(data=np.concatenate((np.array(hparams_store), np.array(aic_store)[..., None]), axis=1),
                           columns=['m', 'p', 'AIC']).sort_values('AIC')
 
         return df
@@ -670,7 +668,7 @@ class Fl_ar(Fl_master):
             return yo_v[:-(h-1), :], y_v[h-1:]
     '''
 
-    def ar_pls_expanding_window(self, h, p,  yo_t, y_t, yo_v, y_v, rolling=False,
+    def ar_pls_expanding_window(self, h, p, yo_t, y_t, yo_v, y_v, rolling=False,
                                 save_dir=None, save_name=None):
         y_hat_store = []
         e_hat_store = []
@@ -751,13 +749,10 @@ class Fl_ar(Fl_master):
             if save_dir:
                 try:
                     data_store.append({'y_hat': y_1_hat.item(),
-                                       'e_hat': e_1_hat.item(),})
+                                       'e_hat': e_1_hat.item(), })
                 except:
                     data_store = [{'y_hat': y_1_hat.item(),
-                                   'e_hat': e_1_hat.item(),}]
-
-
-
+                                   'e_hat': e_1_hat.item(), }]
 
         if save_dir:
             with open('{}/{}_p{}_h{}.pkl'.format(save_dir, save_name, p, h), "wb") as file:
@@ -769,10 +764,11 @@ class Fl_ar(Fl_master):
         hparams_store = list(range(1, p_max + 1))
         aic_store = []
         for p in hparams_store:
-            aic_store.append(self.aic_bic_for_ar(h=h, p=p, h_max=h, p_max=p_max, yo=yo,y=y)[0])
+            aic_store.append(self.aic_bic_for_ar(h=h, p=p, h_max=h, p_max=p_max, yo=yo, y=y)[0])
 
-        df = pd.DataFrame(data=np.concatenate((np.array(hparams_store)[...,None], np.array(aic_store)[...,None]), axis=1),
-                          columns=['p', 'AIC']).sort_values('AIC')
+        df = pd.DataFrame(
+            data=np.concatenate((np.array(hparams_store)[..., None], np.array(aic_store)[..., None]), axis=1),
+            columns=['p', 'AIC']).sort_values('AIC')
 
         return df
 
@@ -780,7 +776,7 @@ class Fl_ar(Fl_master):
         yo_LM, y = self.ar_prepare_data_matrix(yo, y, h, p)
         T = np.shape(yo_LM)[0]
         # Make sure that equal number of observations for all the samples
-        a_max = p_max-p
+        a_max = p_max - p
         if h < h_max or p < p_max:
             yo_LM = yo_LM[-T + h_max + a_max - 1:, :]
             y = y[-T + h_max + a_max - 1:, :]
@@ -1000,7 +996,7 @@ class Fl_cw(Fl_master):
 
 
 class Fl_xgb(Fl_cw):
-    def pls_expanding_window(self, h, m, p, r, cw_model_class, cw_hparams, x_t, yo_t, y_t, x_v, yo_v, y_v,
+    def pls_expanding_window(self, h, r, cw_model_class, cw_hparams, x_t, yo_t, y_t, x_v, yo_v, y_v,
                              z_type,
                              save_dir, save_name,
                              rolling=False):
@@ -1012,17 +1008,25 @@ class Fl_xgb(Fl_cw):
         yo = yo_t
         y = y_t
 
-        for idx, (x_1, yo_1, y_1) in enumerate(zip(x_v.tolist(), yo_v.tolist(), y_v.tolist())):
+        if not isinstance(cw_hparams, list):
+            # cw_hparams is usually just a single dict except when running xgb_with_hparam where a hparam dict is
+            # given for every single time step.
+            cw_hparams = [cw_hparams]
+
+        for idx, (x_1, yo_1, y_1, cw_hparam) in enumerate(
+                zip(x_v.tolist(), yo_v.tolist(), y_v.tolist(), itertools.cycle(cw_hparams))):
+            m = cw_hparam['m']
+            p = cw_hparam['m']*2
             x = np.concatenate((x, np.array(x_1)[None, ...]), axis=0)
             yo = np.concatenate((yo, np.array(yo_1)[None, ...]), axis=0)
             y = np.concatenate((y, np.array(y_1)[None, ...]), axis=0)
 
             z_matrix, y_vec, z_names = self.prepare_data_matrix(x[:-1, :], yo[:-1, :], y[:-1, :], h, m, p, z_type,
                                                                 feature_names=self.features_names)
-            cw_model = cw_model_class(z_matrix=z_matrix, y_vec=y_vec, hparams=cw_hparams, r=r)
+            cw_model = cw_model_class(z_matrix=z_matrix, y_vec=y_vec, hparams=cw_hparam, r=r)
             z_matrix, y_vec = self.prepare_data_matrix(x, yo, y, h, m, p, z_type)
             exog = z_matrix[-1:, :]
-            cw_model.fit(deval=xgb.DMatrix(data=exog, label=y[[-1]]), ehat_eval=cw_hparams['ehat_eval'],
+            cw_model.fit(deval=xgb.DMatrix(data=exog, label=y[[-1]]), ehat_eval=cw_hparam['ehat_eval'],
                          plot_name=None, feature_names=z_names)
             y_1_hat = cw_model.predict(exog=exog, best_ntree_limit=cw_model.model.best_ntree_limit).item()
             e_1_hat = y[-1].item() - y_1_hat
@@ -1170,7 +1174,7 @@ class Fl_xgb(Fl_cw):
                 # Merge default hparams with optimizer trial hparams
                 params = {**default_hparams, **params}
                 if hparam_opt_params['val_mode'] == 'rfcv':
-                    z, y = self.prepare_data_matrix(x, yo, y_all, h, params['m'], params['m']*2, z_type)
+                    z, y = self.prepare_data_matrix(x, yo, y_all, h, params['m'], params['m'] * 2, z_type)
                     cv_results = xgb.cv(params=params, dtrain=xgb.DMatrix(data=z, label=y),
                                         nfold=hparam_opt_params['n_blocks'], num_boost_round=params['num_boost_round'],
                                         early_stopping_rounds=params['early_stopping_rounds'],
@@ -1180,12 +1184,14 @@ class Fl_xgb(Fl_cw):
                     score = cv_results['test-rmse-mean'].values[-1]
                     func_vals.append((score, rounds))
                 elif hparam_opt_params['val_mode'] == 'rep_holdout':
-                    score, rounds = self.val_rep_holdout(x, yo, y_all, h, z_type, n_blocks=hparam_opt_params['n_blocks'],
+                    score, rounds = self.val_rep_holdout(x, yo, y_all, h, z_type,
+                                                         n_blocks=hparam_opt_params['n_blocks'],
                                                          hparams=params)
                     n_rounds_store.append(rounds)
                     func_vals.append((score, rounds))
                 elif hparam_opt_params['val_mode'] == 'prequential':
-                    score, rounds = self.val_prequential(x, yo, y_all, h, z_type, cut_point=hparam_opt_params['cut_point'],
+                    score, rounds = self.val_prequential(x, yo, y_all, h, z_type,
+                                                         cut_point=hparam_opt_params['cut_point'],
                                                          hparams=params,
                                                          save_dir=results_dir,
                                                          save_name=model_name)

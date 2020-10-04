@@ -71,12 +71,24 @@ def poos_experiment(fl_master, fl, est_dates, z_type, h, h_idx, m_max, p_max, fi
             with open('{}/poos_h{}.pkl'.format(save_dir, h), "wb") as file:
                 pickle.dump(data_store, file)
         elif model_mode == 'xgb_with_hparam':
-            hparams = {**kwargs['default_hparams'], **kwargs['set_hparam'][h]}
-            hparams['early_stopping_rounds'] = None
-            hparams['m'] = int(hparams['m'])
-            hparams['max_depth'] = int(hparams['max_depth'])
-            hparams['ehat_eval'] = forecast_error
-            _, _, _, poos_data_store = fl.pls_expanding_window(h=h, p=hparams['m'] * 2, m=hparams['m'], r=8,
+            def prep_hparam(default, set_):
+                hparams = {**default, **set_}
+                hparams['early_stopping_rounds'] = None
+                hparams['m'] = int(hparams['m'])
+                hparams['max_depth'] = int(hparams['max_depth'])
+                hparams['ehat_eval'] = forecast_error
+                return hparams
+
+            try:
+                # Assume it is a hparam for every single forecast.
+                hparams = [prep_hparam(kwargs['default_hparams'], dic) for dic in kwargs['set_hparam'][h][est_date]]
+            except KeyError:
+                # Means it is a single set hparam dict
+                hparams = prep_hparam(kwargs['default_hparams'], kwargs['set_hparam'][h])
+
+
+
+            _, _, _, poos_data_store = fl.pls_expanding_window(h=h, r=8,
                                                                cw_model_class=Xgboost,
                                                                cw_hparams=hparams,
                                                                x_t=x_est,
