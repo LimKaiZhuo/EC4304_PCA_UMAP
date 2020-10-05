@@ -392,7 +392,7 @@ class Xgboost(Boost):
                 self.model.save_raw = myfun
                 explainer = shap.TreeExplainer(self.model, data=self.z_matrix, feature_perturbation='interventional')
             shap_values = csr_matrix(explainer.shap_values(self.z_matrix))
-            return {'feature_score': None,
+            return {'feature_score': 1,
                     'progress': self.progress,
                     'best_ntree_limit': self.model.best_ntree_limit,
                     'shap_values': shap_values,
