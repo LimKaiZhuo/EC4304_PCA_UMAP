@@ -341,31 +341,32 @@ def selector(case, **kwargs):
     elif case == 7:
         # SHAP plots
         h_store = [1, 3, 6, 12, 24]
-        var_name = 'CPIA1house'
-        excel_dir = './excel/dataset_0720/CPIA1house_data_loader.xlsx'
+        var_name = 'CPIA1'
+        expt = 'poos'
+        excel_dir = './excel/dataset_0720/CPIA1_data_loader.xlsx'
         feature_info_dir = './excel/feature_info.xlsx'
         id1 = create_id_dict(var_name=var_name,
                              h=[1, 3, 6, 12, 24],
                              est='rh',
                              model='xgb',
-                             model_name='xgbagamma0',
-                             expt='poos',
+                             model_name='xgba',
+                             expt=expt,
                              seed=42)
         id2 = create_id_dict(var_name=var_name,
                              h=[1, 3, 6, 12, 24],
                              est='rh',
                              model='xgb',
                              model_name='xgba',
-                             expt='poos',
+                             expt=expt,
                              seed=100)
         id3 = create_id_dict(var_name=var_name,
                              h=[1, 3, 6, 12, 24],
                              est='rh',
                              model='xgb',
                              model_name='xgba',
-                             expt='poos',
+                             expt=expt,
                              seed=200)
-        results_dir = create_results_directory('./results/poos/a_SHAP/shap_{}'.format(var_name))
+        results_dir = create_results_directory(f'./results/{expt}/a_SHAP/shap_{var_name}')
         output = read_excel_dataloader(excel_dir=excel_dir)
         fl_master = Fl_master(x=output[0], features_names=output[1],
                               yo=output[2], labels_names=output[3],
@@ -383,10 +384,9 @@ def selector(case, **kwargs):
                   results_dir=results_dir,
                   feature_info_dir=feature_info_dir,
                   est_dates=[f'{x}:1' for x in range(1970, 2020, 5)] + ['2020:6'],
-                  other_xgb_store=None,
-                  side_expt={'house':{}})
+                  other_xgb_store=other_xgb_store,
+                  side_expt={})
 
 
 if __name__ == '__main__':
-    # selector(case=7, excel_dir='./excel/dataset_0720/INDPRO_data_loader.xlsx', var_name='poos_IND_ar')
     selector(case=7)

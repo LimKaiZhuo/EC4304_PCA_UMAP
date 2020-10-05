@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import math, random
-import cvxpy as cp
+#import cvxpy as cp
 import openpyxl, pickle, collections
 import matplotlib.pyplot as plt
 import os, fnmatch

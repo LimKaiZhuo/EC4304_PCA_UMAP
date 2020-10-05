@@ -50,7 +50,7 @@ def poos_experiment(fl_master, fl, est_dates, z_type, h, h_idx, m_max, p_max, fi
             hparams['m'] = int(hparams['m'])
             hparams['max_depth'] = int(hparams['max_depth'])
             hparams['ehat_eval'] = forecast_error
-            _, _, _, poos_data_store = fl.pls_expanding_window(h=h, p=hparams['m'] * 2, m=hparams['m'], r=9,
+            _, _, _, poos_data_store = fl.pls_expanding_window(h=h, r=9,
                                                                cw_model_class=Xgboost,
                                                                cw_hparams=hparams,
                                                                x_t=x_est,
@@ -1018,8 +1018,8 @@ class Shap_data:
         df.index = pd.MultiIndex.from_tuples(df.index.str.split('_L').tolist())
         self.feature_names = feature_names
         self.df = df.T  # Change back to multi-column
-        self.grouped_df = self.df.sum(level=0, axis=1)
-        #self.grouped_df = self.df.abs().sum(level=0, axis=1)
+        #self.grouped_df = self.df.sum(level=0, axis=1)
+        self.grouped_df = self.df.abs().sum(level=0, axis=1)
         self.shap_abs = self.df.abs().sum(axis=0)
         self.grouped_shap_abs = self.grouped_df.sum(axis=0)
         if ts_index:
@@ -1114,9 +1114,9 @@ def poos_shap(fl_master, fl, xgb_store, first_est_date, results_dir, feature_inf
                                      } for blocks in xgb_data for x in blocks['poos_data_store']]))
         grouped_df = []
         sd = Shap_data(poos_data_store[first_est_date]['data']['shap_values'].toarray(), poos_data_store[first_est_date]['feature_names'])
-        sd.add_feature_data(fl_master, fl, hparams=poos_data_store[first_est_date]['hparam'], h=h,
+        sd.add_feature_data(fl_master, fl, hparams=None, h=h,
                             ts=first_est_date, update_ts_only=True,
-                            expected_value=poos_data_store[first_est_date]['data']['expected_value'])
+                            expected_value=None)
         sd.add_feature_info(feature_info_df, h=h)
         grouped_df.append(sd.grouped_df.copy())
         for date, v in poos_data_store.items():
@@ -1175,6 +1175,7 @@ def poos_shap(fl_master, fl, xgb_store, first_est_date, results_dir, feature_inf
         elif 'house' in side_expt:
             temp_df = norm_grouped_df[[x for x in norm_grouped_df.columns.values if 'Housing' in x[1]]]
 
+        '''
         # Scatter plot for Pre-GM and GM
         ts_gm = norm_grouped_df.index.get_loc('1984:4')
         ts_postgm = norm_grouped_df.index.get_loc('2007:1')
@@ -1186,7 +1187,7 @@ def poos_shap(fl_master, fl, xgb_store, first_est_date, results_dir, feature_inf
         sns.despine()
         plt.savefig(f'{results_dir}/h{h}_{name}_scatterplot.png', bbox_inches='tight')
         plt.close()
-
+        '''
 
         # Stacked area plot for SHAP vs time with hue=Groups
         norm_grouped_df.groupby(level=1, axis=1).sum().rolling(12, min_periods=1).mean().plot.area().legend(
@@ -1213,6 +1214,20 @@ def poos_shap(fl_master, fl, xgb_store, first_est_date, results_dir, feature_inf
                                   grid="y", linewidth=1, legend=False, figsize=(6, 6),
                                   colormap=cm.autumn_r)
         plt.savefig(f'{results_dir}/h{h}_{name}_ridgelineplot.png', bbox_inches='tight')
+        plt.close()
+
+        # Stacked area but filter out those with <x% SHAP value
+        x = 0.02
+        grouped_df[norm_grouped_df<x] = 0
+        norm_grouped_df = grouped_df.div(grouped_df.sum(axis=1), axis=0)
+        norm_grouped_df.groupby(level=1, axis=1).sum().rolling(12, min_periods=1).mean().plot.area().legend(
+            loc='center left', bbox_to_anchor=(1, 0.5))
+        fig = plt.gcf()
+        fig.set_size_inches(10, 4)
+        sns.despine()
+        plt.xlim(xmin=12)
+        plt.ylabel('Normalized Grouped |SHAP|')
+        plt.savefig(f'{results_dir}/h{h}_{name}_stackedplot_SHAP{x}.png', bbox_inches='tight')
         plt.close()
 
 
@@ -1250,8 +1265,6 @@ def poos_shap(fl_master, fl, xgb_store, first_est_date, results_dir, feature_inf
         shap_abs.index = ts
         gshap_abs = pd.concat(grouped_shap_abs, axis=1).T
         gshap_abs.index = ts
-
-
 
         top_shap_names, top_shap_values = get_top_columns_per_row(df=shap_abs, n_top=10)
         top_gshap_names, top_gshap_values = get_top_columns_per_row(df=gshap_abs, n_top=10)
@@ -1291,6 +1304,8 @@ def poos_shap(fl_master, fl, xgb_store, first_est_date, results_dir, feature_inf
                             show=False)
             plt.savefig(f'{results_dir}/h{h}_{date.replace(":", "_")}_forceplot.png', bbox_inches='tight')
             plt.close()
+
+            #shap.dependence_plot('AAAFFM',sd.df.values, sd.z_matrix)
 
             if date == '2020:6' and not est_dates:
                 sd.add_feature_info(feature_info_df, h=h)
