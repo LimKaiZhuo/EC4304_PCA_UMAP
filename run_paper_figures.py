@@ -7,7 +7,7 @@ from sklearn.tree import DecisionTreeRegressor, plot_tree
 from sklearn.linear_model import LinearRegression
 from statsmodels.nonparametric.kernel_regression import KernelReg
 import xgboost as xgb
-from own_package.others import create_results_directory
+from own_package.others import create_results_directory, set_matplotlib_style
 
 
 def selector(case):

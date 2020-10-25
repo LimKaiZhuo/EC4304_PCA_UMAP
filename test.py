@@ -341,9 +341,9 @@ def selector(case, **kwargs):
     elif case == 7:
         # SHAP plots
         h_store = [1, 3, 6, 12, 24]
-        var_name = 'CPIA1'
+        var_name = 'IND'
         expt = 'poos'
-        excel_dir = './excel/dataset_0720/CPIA1_data_loader.xlsx'
+        excel_dir = './excel/dataset_0720/INDPRO_data_loader.xlsx'
         feature_info_dir = './excel/feature_info.xlsx'
         id1 = create_id_dict(var_name=var_name,
                              h=[1, 3, 6, 12, 24],
@@ -389,4 +389,4 @@ def selector(case, **kwargs):
 
 
 if __name__ == '__main__':
-    selector(case=7)
+    selector(case=4)

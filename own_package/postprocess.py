@@ -5,9 +5,10 @@ import math, random
 import openpyxl, pickle, collections
 import matplotlib.pyplot as plt
 import os, fnmatch
+import seaborn as sns
 from openpyxl.utils.dataframe import dataframe_to_rows
 from own_package.dm_test import dm_test
-from own_package.others import create_excel_file, create_results_directory
+from own_package.others import create_excel_file, create_results_directory, print_df_to_excel
 
 
 def difference_to_levels(save_dir_store, h_store, rawdata_excel, first_est_date, varname):
@@ -31,6 +32,8 @@ def difference_to_levels(save_dir_store, h_store, rawdata_excel, first_est_date,
             xt = df[[varname]].iloc[start_idx-int(h):-int(h)].values
             xt_1 = df[[varname]].iloc[start_idx-int(h)-1:-int(h)-1].values
             levelhat = xt ** (int(h)+1) / (xt_1 ** int(h)) * np.exp(int(h)/1200*df[[x for x in data_df.columns if '_ehat' in x]].iloc[start_idx:])
+            i1hat = 1200 / int(h) * np.log(levelhat / df[[varname]].iloc[start_idx-int(h):-int(h)].values)
+            i1 = 1200 / int(h) * np.log(df[[varname]].iloc[start_idx:] / df[[varname]].iloc[start_idx-int(h):-int(h)].values)
         else:
             raise TypeError(f'Invalid transformation type: {transformation_type}')
         data_df[f'y_{h}'] = df_master[[varname]].iloc[start_idx:]
@@ -38,38 +41,79 @@ def difference_to_levels(save_dir_store, h_store, rawdata_excel, first_est_date,
         data_store['data_df'] = data_df
         with open(save_dir.partition('.pkl')[0] + '_levels.pkl', 'wb') as handle:
             pickle.dump(data_store, handle)
+        if transformation_type == 6:
+            data_df[f'y_{h}'] = i1
+            data_df[[x for x in data_df.columns if '_ehat' in x]] = i1.values - i1hat
+            data_store['data_df'] = data_df
+            with open(save_dir.partition('.pkl')[0] + '_i1.pkl', 'wb') as handle:
+                pickle.dump(data_store, handle)
 
 
-def combine_poos_analysis(results_dir, dir_store, levels=False, combined_name='combined'):
+def combine_poos_analysis(results_dir, id_store, levels=False, combined_name='combined'):
     if levels:
         levels = '_levels'
     else:
         levels = ''
 
     h_store = [1,3,6,12,24]
+    xgb_models = ['rw_ehat','ll_ehat', 'll*ln_ehat']
 
     for h in h_store:
         df_store = []
-        for dir in dir_store:
+        for id_ in id_store:
             data_df = None
+            dir = id_['results_dir']
             for file in os.listdir(dir):
                 if f'h{h}_analysis_results{levels}.pkl' in file:
                     with open(f'{dir}/{file}', 'rb') as handle:
                         data_df = pickle.load(handle)['data_df']
-                    data_df = data_df[[f'y_{h}']+[x for x in data_df.columns if '_ehat' in x]]
-                    data_df[[x for x in data_df.columns if '_ehat' in x]] = data_df[[f'y_{h}']].values-data_df[[x for x in data_df.columns if '_ehat' in x]]
-                    df_store.append(data_df.copy())
+                    temp_df = data_df[[x for x in data_df.columns if '_ehat' in x]]
 
+                    if id_['model'] == 'xgb':
+                        # temp_df = temp_df[[x for pat in xgb_models for x in temp_df.columns if pat == x]]
+                        temp_df.drop(temp_df.columns[temp_df.columns.str.contains('oracle')], axis=1, inplace=True)
+                        temp_df.columns = [f'{id_["model_full_name_wo_var"]}_{x.partition("_ehat")[0]}' for x in temp_df.columns]
+                    else:
+                        temp_df.columns = [f'{id_["model_full_name_wo_var"]}']
+                    temp_df = data_df[[f'y_{h}']].values-temp_df  # y hat = y - e hat
+                    df_store.append(temp_df)
             if data_df is None:
                 raise FileNotFoundError(f'For {dir}, h step = {h} analysis results pickle file was not found')
 
+        y = data_df[[f'y_{h}']].values
         # Take simple avg. of all the yhat from the different models in dir_store
-        data_df = pd.concat(objs=df_store, axis=0).groupby(level=0).mean()
-        data_df[[x for x in data_df.columns if '_ehat' in x]] = data_df[[f'y_{h}']].values - data_df[
-            [x for x in data_df.columns if '_ehat' in x]]
+        data_df = pd.concat(objs=df_store, axis=1)
+
+        # Combinations
+        combi_store = {}
+        # c1 ALL
+        combi_store['c1'] = data_df.mean(axis=1)
+        # c2 All traditional: RW+AR+PCA
+        combi_store['c2'] = data_df[data_df.columns[data_df.columns.str.contains('^rw$|^ar$|^pca$')]].mean(axis=1)
+        # c3 All ML
+        combi_store['c3'] = data_df[data_df.columns[~data_df.columns.str.contains('^rw$|^ar$|^pca$')]].mean(axis=1)
+        # c4 All XGB
+        combi_store['c4'] = data_df[data_df.columns[data_df.columns.str.contains('^xgba_')]].mean(axis=1)
+        # c5 All XGB s42
+        combi_store['c5'] = data_df[data_df.columns[data_df.columns.str.contains('^xgba_.+_s42')]].mean(axis=1)
+        # c6 All XGB selected models
+        combi_store['c6'] = data_df[data_df.columns[data_df.columns.str.contains('^xgba.*_(?:rw|ll|ll\*ln)$')]].mean(axis=1)
+        # c7 All XGB selected models s42
+        combi_store['c7'] = data_df[data_df.columns[data_df.columns.str.contains('^xgba.*_s42_(?:rw|ll|ll\*ln)$')]].mean(axis=1)
+        # c8 XGB rh rw only
+        combi_store['c8'] = data_df[data_df.columns[data_df.columns.str.contains('^xgba_rh_s.+_rw$')]].mean(axis=1)
+        # c9 XGB rh rw with RW+AR+PCA
+        combi_store['c9'] = data_df[data_df.columns[data_df.columns.str.contains('^rw$|^ar$|^pca$|^xgba_rh_s.+_rw$')]].mean(axis=1)
+
+        combi_store = pd.DataFrame.from_dict(combi_store, orient='columns')
+
+        data_df = pd.concat((data_df, combi_store), axis=1)
+        data_df = y - data_df
+        data_df.columns = [f'{x}_ehat' for x in data_df.columns]
+        data_df[f'y_{h}'] = y
 
         with open(f'{results_dir}/poos_{combined_name}_h{h}_analysis_results{levels}.pkl', 'wb') as handle:
-            pickle.dump({'data_df': data_df, 'combined_dir_store':dir_store}, handle)
+            pickle.dump({'data_df': data_df}, handle)
 
 
 def plot_forecasts(save_dir_store, results_dir, model_names, est_store, h_store):
@@ -137,6 +181,56 @@ def read_excel_to_df(excel_dir):
             df_store.append(df)
 
     return df_store
+
+
+def get_final_submission_excel(excel_dir, read_excel_dir):
+    xls = pd.ExcelFile(read_excel_dir)  # './results/expt1/a_Final_submission_expt1/combined_poos_results_CPIA.xlsx')
+    data = {'rmse': [], 'rel_rmse': []}
+    for sheet in xls.sheet_names:
+        if 'rel_rmse_sel' in sheet:
+            temp_df = pd.read_excel(xls, sheet_name=sheet).iloc[-2:,:]
+            temp_df.index = [['2005:1~2019:12', '2020:1~2020:6']]
+            data['rel_rmse'].append(temp_df)
+        elif 'rmse_sel' in sheet:
+            temp_df = pd.read_excel(xls, sheet_name=sheet).iloc[-2:,:]
+            temp_df.index = [['2005:1~2019:12', '2020:1~2020:6']]
+            data['rmse'].append(temp_df)
+
+    excel_dir = create_excel_file(excel_dir)
+    wb = openpyxl.load_workbook(excel_dir)
+    for k,v in data.items():
+        temp_df = pd.concat(v, axis=0)
+        temp_df.index = temp_df.iloc[:,0]
+        temp_df.drop(labels=temp_df.columns[0], axis=1, inplace=True)
+        wb.create_sheet(k)
+        ws = wb[k]
+        print_df_to_excel(df=temp_df, ws=ws)
+
+    '''
+    columns = ['Horizons', 'RW', 'AR', 'PCA']+ [f'{y}-{x}' for y in ['XGBA(rh)', 'XGBA(rfcv)'] for x in ['oracle', 'rw', 'hparam','ll', 'll*ln', 'rw_ll*ln']] + ['RF(rh)', 'RF(rfcv)']
+    df = pd.read_excel('./results/expt1/a_Final_submission_expt1/final_table_IND.xlsx', sheet_name='rmse')
+    df.columns = columns
+    df['h'] = [x for x in [1,3,6,12,24] for _ in range(2)]
+    df.iloc[:,1:-1] = df.iloc[:,1:-1].div([1,6,1,4,1,2,1,1.5,1,1], axis=0)
+    df = df.melt(id_vars=['h', 'Horizons'], var_name='Model', value_name='RMSE')
+    df = df[df['Model'].isin(['RW', 'AR', 'PCA', 'XGBA(rh)-rw', 'XGBA(rh)-hparam', 'RF(rh)'])]
+    df = df.replace(['XGBA(rh)-rw', 'XGBA(rh)-hparam', 'RF(rh)'], ['XR', 'XH', 'RF'])
+    sns.catplot(x="Model", y="RMSE",
+                hue="Horizons", col="h",
+                data=df, kind="bar", height=2.5, aspect=1.5, sharey=False, legend=False)
+    # plt.subplots_adjust(wspace=0)
+    plt.legend(bbox_to_anchor=(1.15, 1))
+    g = plt.gcf()
+    for ax1, (_, subdata), divby in zip(g.axes, df.groupby('h'), [6,4,2,1.5,1]):
+        ax2=ax1.twinx()
+        ax2.set_ylim(ax1.get_ylim())
+        ax2.set_yticklabels(np.round(ax1.get_yticks() *divby, 1))
+    
+    plt.show()
+    '''
+
+    wb.save(excel_dir)
+
 
 
 def compile_pm_rm_excel(excel_dir_store):

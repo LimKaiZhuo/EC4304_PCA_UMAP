@@ -23,7 +23,7 @@ def selector(case, **kwargs):
                         y_names=fl_master.y_names)
         first_est_date = '2005:1'
         est_dates = ['2004:12']
-        model_mode = 'xgb_with_hparam'
+        model_mode = 'xgb'
         if model_mode == 'xgb' or model_mode == 'xgb_with_hparam':
             default_hparams = {'seed': seed,
                                'booster': 'gbtree',
@@ -44,7 +44,7 @@ def selector(case, **kwargs):
                                'max_depth': 1,
                                'colsample_bytree': 0.5,
                                }
-            hparam_opt_params = {'hparam_mode': 'bo', 'n_calls': 400, 'n_random_starts': 350,
+            hparam_opt_params = {'hparam_mode': 'bo', 'n_calls': 200, 'n_random_starts': 150,
                                  'val_mode': 'rep_holdout',
                                  'n_blocks': 5, 'cut_point': 0.95,
                                  'variables': {'max_depth': {'type': 'Integer', 'lower': 1, 'upper': 6},
