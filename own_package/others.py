@@ -107,11 +107,13 @@ def create_id_dict(var_name, h, expt, est, model=None, model_name=None, seed=Non
     if not est:
         results_dir = f'./results/{expt}/poos_{var_name}_{model_name}'
         model_full_name = f'{var_name}_{model_name}'
+        model_full_name_wo_var = model_name
     else:
         results_dir = f'./results/{expt}/poos_{var_name}_{model_name}_{est}_s{seed}'
         model_full_name = f'{var_name}_{model_name}_{est}_s{seed}'
+        model_full_name_wo_var = f'{model_name}_{est}_s{seed}'
     return {'var_name': var_name, 'h': h, 'est': est, 'model': model, 'model_name': model_name, 'expt': expt,
-               'seed': seed,
+               'seed': seed, 'model_full_name_wo_var': model_full_name_wo_var,
                'results_dir': results_dir,
                'model_full_name': model_full_name,}
 

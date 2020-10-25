@@ -504,11 +504,58 @@ class Fl_pca(Fl_master):
                              rolling=False, save_dir=None, save_name=None):
         y_hat_store = []
         e_hat_store = []
+        yo = yo_t
+        y = y_t
+        x = x_t
 
         # x_v, yo_v, y_v = self.prepare_validation_data_h_step_ahead(x_v, yo_v, y_v, h)
         n_val = np.shape(x_v)[0]
 
         # Training on train set first
+        for idx, (x_1, yo_1, y_1) in enumerate(zip(x_v.tolist(), yo_v.tolist(), y_v.tolist())):
+            x = np.concatenate((x, np.array(x_1)[None, ...]), axis=0)
+            yo = np.concatenate((yo, np.array(yo_1)[None, ...]), axis=0)
+            y = np.concatenate((y, np.array(y_1)[None, ...]), axis=0)
+
+            f, _ = factor_model(x=x[:-h, :], r=r)
+            f_LM_t, yo_LM_t, y_RO_t = self.pca_umap_prepare_data_matrix(f, yo[:-h, :], y[:-h, :], h, m, p)
+            ols_model = sm.OLS(endog=y_RO_t, exog=sm.add_constant(np.concatenate((f_LM_t, yo_LM_t), axis=1)))
+            ols_model = ols_model.fit()
+
+            if idx == 0:
+                results_t = copy.deepcopy(ols_model)
+
+            f = np.concatenate((f, np.zeros((h, f.shape[1]))), axis=0)
+            f_LM_t, yo_LM_t, y_RO_t = self.pca_umap_prepare_data_matrix(f, yo, y, h, m, p)
+            exog = np.concatenate((f_LM_t, yo_LM_t), axis=1)[-1, :][None, ...]
+
+            y_1_hat = ols_model.predict(exog=np.concatenate((np.ones((1, 1)), exog), axis=1))
+            e_1_hat = y_1 - y_1_hat
+
+            y_hat_store.append(y_1_hat.item())
+            e_hat_store.append(e_1_hat.item())
+
+            if save_dir:
+                try:
+                    data_store.append({'y_hat': y_1_hat.item(),
+                                       'e_hat': e_1_hat.item(),
+                                       'aic': ols_model.aic,
+                                       'bic': ols_model.bic})
+                except:
+                    data_store = [{'y_hat': y_1_hat.item(),
+                                   'e_hat': e_1_hat.item(),
+                                   'aic': ols_model.aic,
+                                   'bic': ols_model.bic}]
+
+            if idx + 1 == n_val:
+                break  # since last iteration, no need to waste time re-estimating model
+
+            if rolling:
+                # Drop the first observation in the matrix for rolling window\
+                x = x[1:,:]
+                yo = yo[1:, :]
+                y = y[1:, :]
+        '''
         f_t, _ = factor_model(x=x_t, r=r)
         f_LM_t, yo_LM_t, y_RO_t = self.pca_umap_prepare_data_matrix(f_t, yo_t, y_t, h, m, p)
         ols_model = sm.OLS(endog=y_RO_t, exog=sm.add_constant(np.concatenate((f_LM_t, yo_LM_t), axis=1)))
@@ -557,7 +604,7 @@ class Fl_pca(Fl_master):
 
             ols_model = sm.OLS(endog=y_RO_t, exog=sm.add_constant(np.concatenate((f_LM_t, yo_LM_t), axis=1)))
             ols_model = ols_model.fit()
-
+        '''
         if save_dir:
             with open('{}/{}_m{}_p{}_h{}.pkl'.format(save_dir, save_name, m, p, h), "wb") as file:
                 pickle.dump(data_store, file)
@@ -672,8 +719,8 @@ class Fl_ar(Fl_master):
                                 save_dir=None, save_name=None):
         y_hat_store = []
         e_hat_store = []
-
-        # yo_v, y_v = self.ar_prepare_validation_data_h_step_ahead(yo_v, y_v, h)
+        yo = yo_t
+        y = y_t
         n_val = np.shape(yo_v)[0]
 
         # Training on train set first.
@@ -681,6 +728,46 @@ class Fl_ar(Fl_master):
         # y = information set for transformed y to be forecasted.
         # yo_LM_t = original y lag matrix for training dataset
         # y_RO_t = y regression output for training dataset
+        for idx, (yo_1, y_1) in enumerate(
+                zip(yo_v.tolist(), y_v.tolist())):
+            yo = np.concatenate((yo, np.array(yo_1)[None, ...]), axis=0)
+            y = np.concatenate((y, np.array(y_1)[None, ...]), axis=0)
+
+            #z_matrix, y_vec, z_names = self.prepare_data_matrix(x[:-1, :], yo[:-1, :], y[:-1, :], h, m, p, z_type,
+            #                                                    feature_names=self.features_names)
+            z_matrix, y_vec = self.ar_prepare_data_matrix(yo[:-h, :], y[:-h, :], h, p)
+            ols_model = sm.OLS(endog=y_vec, exog=sm.add_constant(z_matrix))
+            ols_model = ols_model.fit()
+            if idx == 0:
+                results_t = copy.deepcopy(ols_model)
+            z_matrix, y_vec = self.ar_prepare_data_matrix(yo, y, h, p)
+            exog = z_matrix[-1:, :]
+            y_1_hat = ols_model.predict(exog=np.concatenate((np.ones((1, 1)), exog), axis=1))
+            e_1_hat = y_1 - y_1_hat
+
+            y_hat_store.append(y_1_hat.item())
+            e_hat_store.append(e_1_hat.item())
+
+            if save_dir:
+                try:
+                    data_store.append({'y_hat': y_1_hat.item(),
+                                       'e_hat': e_1_hat.item(),
+                                       'aic': ols_model.aic,
+                                       'bic': ols_model.bic})
+                except:
+                    data_store = [{'y_hat': y_1_hat.item(),
+                                   'e_hat': e_1_hat.item(),
+                                   'aic': ols_model.aic,
+                                   'bic': ols_model.bic}]
+
+            if idx + 1 == n_val:
+                break  # since last iteration, no need to waste time re-estimating model
+
+            if rolling:
+                # Drop the first observation in the matrix for rolling window\
+                yo = yo[1:, :]
+                y = y[1:, :]
+        '''
         yo_LM_t, y_RO_t = self.ar_prepare_data_matrix(yo_t, y_t, h, p)
         ols_model = sm.OLS(endog=y_RO_t, exog=sm.add_constant(yo_LM_t))
 
@@ -724,7 +811,7 @@ class Fl_ar(Fl_master):
             # yo_LM_t, y_t, y_idx_t = self.ar_prepare_data_matrix(yo_t, y_t, h, p)
             ols_model = sm.OLS(endog=y_RO_t, exog=sm.add_constant(yo_LM_t))
             ols_model = ols_model.fit()
-
+        '''
         if save_dir:
             with open('{}/{}_p{}_h{}.pkl'.format(save_dir, save_name, p, h), "wb") as file:
                 pickle.dump(data_store, file)
@@ -1021,7 +1108,9 @@ class Fl_xgb(Fl_cw):
             yo = np.concatenate((yo, np.array(yo_1)[None, ...]), axis=0)
             y = np.concatenate((y, np.array(y_1)[None, ...]), axis=0)
 
-            z_matrix, y_vec, z_names = self.prepare_data_matrix(x[:-1, :], yo[:-1, :], y[:-1, :], h, m, p, z_type,
+            #z_matrix, y_vec, z_names = self.prepare_data_matrix(x[:-1, :], yo[:-1, :], y[:-1, :], h, m, p, z_type,
+            #                                                    feature_names=self.features_names)
+            z_matrix, y_vec, z_names = self.prepare_data_matrix(x[:-h, :], yo[:-h, :], y[:-h, :], h, m, p, z_type,
                                                                 feature_names=self.features_names)
             cw_model = cw_model_class(z_matrix=z_matrix, y_vec=y_vec, hparams=cw_hparam, r=r)
             z_matrix, y_vec = self.prepare_data_matrix(x, yo, y, h, m, p, z_type)
