@@ -278,7 +278,6 @@ def poos_analysis(fl_master, h, h_idx, model_mode, est_mode, results_dir, save_d
 
     if model_mode == 'xgb':
         index_products = [('y', str(idx)) for idx in range(3)]
-        score_df = pd.DataFrame(index=pd.MultiIndex.from_tuples(index_products, names=['Variable', 'Lag'])).T
         ae_store = []
         ehat_store = []
         optimal_ntree_store = []
@@ -292,11 +291,6 @@ def poos_analysis(fl_master, h, h_idx, model_mode, est_mode, results_dir, save_d
             ssm_store[k] = {f'{k}_ntree': [], f'{k}_ehat': [], f'{k}_res': []}
 
         for idx, data in enumerate(data_store):
-            for single_step in data['poos_data_store']:
-                scores = {(k.partition('_L')[0], k.partition('_L')[-1]): v for k, v in
-                          single_step['feature_score'].items()}
-                score_df = score_df.append(scores, ignore_index=True)
-
             block_ae = [single_step['progress']['h_step_ahead']['rmse'] for single_step in data['poos_data_store']]
             block_store.extend([idx] * len(block_ae))
             block_ehat = [single_step['progress']['h_step_ahead']['ehat'] for single_step in data['poos_data_store']]
@@ -471,7 +465,7 @@ def poos_xgb_plotting_m(h, results_dir, ssm_modes):
         ax.scatter(df.loc[y][f'{ssm_modes[0]}_ntree'], ehat_df[y].iloc[int(df.loc[y][f'{ssm_modes[0]}_ntree'])],
                    marker='x', s=70)
     fig.tight_layout()
-    fig.savefig(f'{results_dir}/{ssm_modes[0].replace("*", "_")}ehat_vs_ntrees_h{h}.png', transparent=False, dpi=300,
+    fig.savefig(f'{results_dir}/{ssm_modes[0].replace("*", "_")}ehat_vs_ntrees_h{h}.png', transparent=False,
                 bbox_inches="tight")
 
 

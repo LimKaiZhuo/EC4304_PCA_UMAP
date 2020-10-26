@@ -24,7 +24,7 @@ def selector(case, **kwargs):
 
         first_est_date = '1970:1'
 
-        model_mode = 'xgb'
+        model_mode = 'rf'
         if model_mode == 'xgb' or model_mode == 'xgb_with_hparam':
             default_hparams = {'seed': 42,
                                'booster': 'gbtree',
@@ -72,8 +72,8 @@ def selector(case, **kwargs):
                                'max_depth': 1,
                                'colsample_bytree': 1,
                                }
-            hparam_opt_params = {'hparam_mode': 'bo', 'n_calls': 200, 'n_random_starts': 150,
-                                 'val_mode': 'rfcv',
+            hparam_opt_params = {'hparam_mode': 'bo', 'n_calls': 150, 'n_random_starts': 100,
+                                 'val_mode': 'rep_holdout',
                                  'n_blocks': 5, 'cut_point': 0.95,
                                  'variables': {'max_depth': {'type': 'Integer', 'lower': 1, 'upper': 6},
                                                'subsample': {'type': 'Real', 'lower': 0.5, 'upper': 1},
@@ -89,6 +89,7 @@ def selector(case, **kwargs):
 
         hparam_save_dir = './results/poos/poos_IND_xgbar'
         est_dates = [f'{x}:12' for x in range(1969, 2020, 5)[:-1]]
+        #est_dates = [f'{x}:12' for x in range(2004, 2020, 5)[:-1]]
         #poos_experiment(fl_master=fl_master, fl=fl_xgb, est_dates=est_dates, z_type=1, h=1, h_idx=0,
         #                m_max=12, p_max=24, model_mode=model_mode, save_dir=results_dir, first_est_date=first_est_date,
         #                default_hparams=default_hparams, hparam_opt_params=hparam_opt_params,
@@ -126,4 +127,4 @@ def selector(case, **kwargs):
 
 
 if __name__ == '__main__':
-    selector(case=1, excel_dir='./excel/dataset_0720/INDPRO_data_loader.xlsx', var_name='poos_IND_xgba_rh_s42')
+    selector(case=1, excel_dir='./excel/dataset_0720/INDPRO_data_loader.xlsx', var_name='poos_IND_rf_rh_s42')

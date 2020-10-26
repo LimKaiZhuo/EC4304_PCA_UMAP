@@ -23,7 +23,7 @@ def selector(case, **kwargs):
                         y_names=fl_master.y_names)
         first_est_date = '2005:1'
         est_dates = ['2004:12']
-        model_mode = 'rf'
+        model_mode = 'xgb'
         if model_mode == 'xgb' or model_mode == 'xgb_with_hparam':
             default_hparams = {'seed': seed,
                                'booster': 'gbtree',
@@ -88,21 +88,21 @@ def selector(case, **kwargs):
             default_hparams = None
             hparam_opt_params = None
 
-        poos_experiment(fl_master=fl_master, fl=fl_xgb, est_dates=est_dates, z_type=1, h=1, h_idx=0,
-                        m_max=12, p_max=24, model_mode=model_mode, save_dir=results_dir, first_est_date=first_est_date,
-                        default_hparams=default_hparams, hparam_opt_params=hparam_opt_params,
-                        set_hparam=kwargs['set_hparam']
-                        )
-        poos_experiment(fl_master=fl_master, fl=fl_xgb, est_dates=est_dates, z_type=1, h=3, h_idx=1,
-                        m_max=12, p_max=24, model_mode=model_mode, save_dir=results_dir, first_est_date=first_est_date,
-                        default_hparams=default_hparams, hparam_opt_params=hparam_opt_params,
-                        set_hparam=kwargs['set_hparam']
-                        )
-        poos_experiment(fl_master=fl_master, fl=fl_xgb, est_dates=est_dates, z_type=1, h=6, h_idx=2,
-                        m_max=12, p_max=24, model_mode=model_mode, save_dir=results_dir, first_est_date=first_est_date,
-                        default_hparams=default_hparams, hparam_opt_params=hparam_opt_params,
-                        set_hparam=kwargs['set_hparam']
-                        )
+        #poos_experiment(fl_master=fl_master, fl=fl_xgb, est_dates=est_dates, z_type=1, h=1, h_idx=0,
+        #                m_max=12, p_max=24, model_mode=model_mode, save_dir=results_dir, first_est_date=first_est_date,
+        #                default_hparams=default_hparams, hparam_opt_params=hparam_opt_params,
+        #                set_hparam=kwargs['set_hparam']
+        #                )
+        #poos_experiment(fl_master=fl_master, fl=fl_xgb, est_dates=est_dates, z_type=1, h=3, h_idx=1,
+        #                m_max=12, p_max=24, model_mode=model_mode, save_dir=results_dir, first_est_date=first_est_date,
+        #                default_hparams=default_hparams, hparam_opt_params=hparam_opt_params,
+        #                set_hparam=kwargs['set_hparam']
+        #                )
+        #poos_experiment(fl_master=fl_master, fl=fl_xgb, est_dates=est_dates, z_type=1, h=6, h_idx=2,
+        #                m_max=12, p_max=24, model_mode=model_mode, save_dir=results_dir, first_est_date=first_est_date,
+        #                default_hparams=default_hparams, hparam_opt_params=hparam_opt_params,
+        #                set_hparam=kwargs['set_hparam']
+        #                )
         poos_experiment(fl_master=fl_master, fl=fl_xgb, est_dates=est_dates, z_type=1, h=12, h_idx=3,
                         m_max=12, p_max=24, model_mode=model_mode, save_dir=results_dir, first_est_date=first_est_date,
                         default_hparams=default_hparams, hparam_opt_params=hparam_opt_params,

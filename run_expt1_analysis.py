@@ -15,23 +15,23 @@ def selector(case, **kwargs):
         ehats. Performs online learning of optimal ntrees. Save results in another pickle object which is a dict of 
         results.
         '''
-        excel_dir = './excel/dataset_0720/CPIA1_data_loader.xlsx'
+        excel_dir = './excel/dataset_0720/INDPRO_data_loader.xlsx'
         output = read_excel_dataloader(excel_dir=excel_dir)
         fl_master = Fl_master(x=output[0], features_names=output[1],
                               yo=output[2], labels_names=output[3],
                               y=output[4], y_names=output[5],
                               time_stamp=output[6])
         first_est_date = '2005:1'
-        id = create_id_dict(var_name='CPIA1',
-                            h=[1, 3, 6, 12, 24],
+        id = create_id_dict(var_name='IND',
+                            h=[24],
                             est='rh',
                             model='xgb',
-                            model_name='xgbag0',
+                            model_name='xgbahp',
                             expt='expt1',
                             combined_name=None,
                             seed=42, )
-        h_store = [1, 3, 6, 12, 24]
-        h_idx_store = [0, 1, 2, 3, 4]
+        h_store = [24]
+        h_idx_store = [4]
         for h, h_idx in zip(h_store, h_idx_store):
             poos_analysis(fl_master=fl_master, h=h, h_idx=h_idx, model_mode=id['model'], est_mode=id['est'],
                           results_dir=id['results_dir'],
@@ -50,7 +50,7 @@ def selector(case, **kwargs):
                                 h=[1, 3, 6, 12, 24],
                                 est='rh',
                                 model='xgb',
-                                model_name='xgba',
+                                model_name='xgbahp',
                                 expt='expt1',
                                 combined_name=None,
                                 seed=42,
@@ -623,4 +623,4 @@ if __name__ == '__main__':
     #                                                  combined_name='c1',
     #                                                  expt='expt1',
     #                                                  est='rh'))
-    selector(case=4, excel_dir='./excel/dataset_0720/INDPRO_data_loader.xlsx', var_name='poos_IND_ar')
+    selector(case=3, excel_dir='./excel/dataset_0720/INDPRO_data_loader.xlsx', var_name='poos_IND_ar')
