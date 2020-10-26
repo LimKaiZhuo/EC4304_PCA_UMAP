@@ -108,18 +108,18 @@ def poos_experiment(fl_master, fl, est_dates, z_type, h, h_idx, m_max, p_max, fi
                 pickle.dump(data_store, file)
         elif model_mode == 'rf':
             hparams_df = fl.xgb_hparam_opt(x=x_est, yo=yo_est, y=y_est[:, [h_idx]], h=h,
-                                           m_max=m_max, p_max=p_max,
-                                           z_type=z_type,
-                                           hparam_opt_params=kwargs['hparam_opt_params'],
-                                           default_hparams=kwargs['default_hparams'],
-                                           results_dir=None,
-                                           model_name=None)
+                                          m_max=m_max, p_max=p_max,
+                                          z_type=z_type,
+                                          hparam_opt_params=kwargs['hparam_opt_params'],
+                                          default_hparams=kwargs['default_hparams'],
+                                          results_dir=None,
+                                          model_name=None)
 
-            # wb = openpyxl.Workbook()
-            # ws = wb[wb.sheetnames[-1]]
-            # print_df_to_excel(df=hparams_df, ws=ws)
-            # wb.save('./results/poos/hparams.xlsx')
-            # print('done')
+            #wb = openpyxl.Workbook()
+            #ws = wb[wb.sheetnames[-1]]
+            #print_df_to_excel(df=hparams_df, ws=ws)
+            #wb.save('./results/poos/hparams.xlsx')
+            #print('done')
 
             hparams = {**kwargs['default_hparams'], **hparams_df.iloc[0, :].to_dict()}
             hparams['early_stopping_rounds'] = None
@@ -127,7 +127,7 @@ def poos_experiment(fl_master, fl, est_dates, z_type, h, h_idx, m_max, p_max, fi
             hparams['max_depth'] = int(hparams['max_depth'])
             hparams['num_parallel_tree'] = int(hparams['num_parallel_tree'])
             hparams['ehat_eval'] = forecast_error
-            _, _, _, poos_data_store = fl.pls_expanding_window(h=h, p=hparams['m'] * 2, m=hparams['m'], r=8,
+            _, _, _, poos_data_store = fl.pls_expanding_window(h=h, r=8,
                                                                cw_model_class=Xgboost,
                                                                cw_hparams=hparams,
                                                                x_t=x_est,
