@@ -45,7 +45,7 @@ def selector(case, **kwargs):
                                'max_depth': 1,
                                'colsample_bytree': 0.5,
                                }
-            hparam_opt_params = {'hparam_mode': 'bo', 'n_calls': 200, 'n_random_starts': 150,
+            hparam_opt_params = {'hparam_mode': 'bo', 'n_calls': 150, 'n_random_starts': 100,
                                  'val_mode': 'rep_holdout',
                                  'n_blocks': 5, 'cut_point': 0.95,
                                  'variables': {'max_depth': {'type': 'Integer', 'lower': 1, 'upper': 6},
@@ -94,21 +94,21 @@ def selector(case, **kwargs):
         #                default_hparams=default_hparams, hparam_opt_params=hparam_opt_params,
         #                hparam_save_dir=hparam_save_dir
         #                )
-        #poos_experiment(fl_master=fl_master, fl=fl_xgb, est_dates=est_dates, z_type=1, h=3, h_idx=1,
-        #                m_max=12, p_max=24, model_mode=model_mode, save_dir=results_dir,first_est_date=first_est_date,
-        #                default_hparams=default_hparams, hparam_opt_params=hparam_opt_params,
-        #                hparam_save_dir=hparam_save_dir
-        #                )
-        #poos_experiment(fl_master=fl_master, fl=fl_xgb, est_dates=est_dates, z_type=1, h=6, h_idx=2,
-        #                m_max=12, p_max=24, model_mode=model_mode, save_dir=results_dir,first_est_date=first_est_date,
-        #                default_hparams=default_hparams, hparam_opt_params=hparam_opt_params,
-        #                hparam_save_dir=hparam_save_dir
-        #                )
-        #poos_experiment(fl_master=fl_master, fl=fl_xgb, est_dates=est_dates, z_type=1, h=12, h_idx=3,
-        #                m_max=12, p_max=24, model_mode=model_mode, save_dir=results_dir,first_est_date=first_est_date,
-        #                default_hparams=default_hparams, hparam_opt_params=hparam_opt_params,
-        #                hparam_save_dir=hparam_save_dir
-        #                )
+        poos_experiment(fl_master=fl_master, fl=fl_xgb, est_dates=est_dates, z_type=1, h=3, h_idx=1,
+                        m_max=12, p_max=24, model_mode=model_mode, save_dir=results_dir,first_est_date=first_est_date,
+                        default_hparams=default_hparams, hparam_opt_params=hparam_opt_params,
+                        hparam_save_dir=hparam_save_dir
+                        )
+        poos_experiment(fl_master=fl_master, fl=fl_xgb, est_dates=est_dates, z_type=1, h=6, h_idx=2,
+                        m_max=12, p_max=24, model_mode=model_mode, save_dir=results_dir,first_est_date=first_est_date,
+                        default_hparams=default_hparams, hparam_opt_params=hparam_opt_params,
+                        hparam_save_dir=hparam_save_dir
+                        )
+        poos_experiment(fl_master=fl_master, fl=fl_xgb, est_dates=est_dates, z_type=1, h=12, h_idx=3,
+                        m_max=12, p_max=24, model_mode=model_mode, save_dir=results_dir,first_est_date=first_est_date,
+                        default_hparams=default_hparams, hparam_opt_params=hparam_opt_params,
+                        hparam_save_dir=hparam_save_dir
+                        )
         poos_experiment(fl_master=fl_master, fl=fl_xgb, est_dates=est_dates, z_type=1, h=24, h_idx=4,
                         m_max=12, p_max=24, model_mode=model_mode, save_dir=results_dir,first_est_date=first_est_date,
                         default_hparams=default_hparams, hparam_opt_params=hparam_opt_params,
@@ -126,4 +126,4 @@ def selector(case, **kwargs):
 
 
 if __name__ == '__main__':
-    selector(case=1, excel_dir='./excel/dataset_0720/INDPRO_data_loader.xlsx', var_name='poos_IND_rf_rfcv_s42')
+    selector(case=1, excel_dir='./excel/dataset_0720/INDPRO_data_loader.xlsx', var_name='poos_IND_xgba_rh_s42')

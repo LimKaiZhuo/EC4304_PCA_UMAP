@@ -23,7 +23,7 @@ def selector(case, **kwargs):
                         y_names=fl_master.y_names)
         first_est_date = '2005:1'
         est_dates = ['2004:12']
-        model_mode = 'xgb'
+        model_mode = 'rf'
         if model_mode == 'xgb' or model_mode == 'xgb_with_hparam':
             default_hparams = {'seed': seed,
                                'booster': 'gbtree',
