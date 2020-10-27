@@ -236,18 +236,8 @@ def poos_experiment(fl_master, fl, est_dates, z_type, h, h_idx, m_max, p_max, fi
 
 
 def poos_analysis(fl_master, h, h_idx, model_mode, est_mode, results_dir, save_dir, first_est_date):
-    def calculate_sequence_ntree(block_ae, hparam_ntree):
-        best_idx_store = list(np.argmin(block_ae, axis=1))
-        predicted_idx = [hparam_ntree] * 5
-        current_window = best_idx_store[:5]
-        for y in best_idx_store[5:]:
-            model = LocalLevel(current_window)
-            res = model.fit(disp=False)
-            predicted_idx.append(int(res.forecast()))
-            current_window.append(y)
-        return best_idx_store, predicted_idx
-
-    def calculate_ssm_ntree(hparam_ntree, optimal_ntree, mode, burn_periods=10):
+    '''
+        def calculate_ssm_ntree(hparam_ntree, optimal_ntree, mode, burn_periods=10):
         best_idx_store = optimal_ntree
         predicted_idx = [hparam_ntree] + optimal_ntree[:(burn_periods - 1)]
         current_window = best_idx_store[:burn_periods]
@@ -256,6 +246,29 @@ def poos_analysis(fl_master, h, h_idx, model_mode, est_mode, results_dir, save_d
             base.fit(X=current_window)
             predicted_idx.append(int(max(min(base.predict(), 599), 0)))
             current_window.append(y)
+        return predicted_idx, base.res_
+    :param fl_master:
+    :param h:
+    :param h_idx:
+    :param model_mode:
+    :param est_mode:
+    :param results_dir:
+    :param save_dir:
+    :param first_est_date:
+    :return:
+    '''
+    def calculate_ssm_ntree(hparam_ntree, optimal_ntree, mode, burn_periods=10):
+        info_set = optimal_ntree[:-h]
+        predicted_idx = [hparam_ntree]*h
+        for idx, y in enumerate(optimal_ntree[h:]):
+            current_window = info_set[:idx+1]
+            if idx+1<burn_periods:
+                predicted_idx.append(current_window[-1])
+            else:
+                base = SSMBase(mode=mode)
+                base.fit(X=current_window)
+                predicted_idx.append(int(max(min(base.predict(), 599), 0)))
+                current_window.append(y)
         return predicted_idx, base.res_
 
     def calculate_horizon_rmse_ae(block_ae, block_ehat, sequence_ntree):
@@ -285,7 +298,7 @@ def poos_analysis(fl_master, h, h_idx, model_mode, est_mode, results_dir, save_d
         rw_ntree_store = []
         hparam_ntree_store = []
         block_store = []
-        ssm_modes = ['arima*ln', 'll', 'lls', 'llt', 'llc', 'll*ln', 'lls*ln', 'llt*ln', 'llc*ln', ]
+        ssm_modes = ['rw1*f','ll', 'll*ln', 'll*f', 'll*ln*f', 'arima*ln', 'lls*ln', 'llt*ln', 'llc*ln', ]
         ssm_store = {}
         for k in ssm_modes:
             ssm_store[k] = {f'{k}_ntree': [], f'{k}_ehat': [], f'{k}_res': []}
@@ -306,11 +319,8 @@ def poos_analysis(fl_master, h, h_idx, model_mode, est_mode, results_dir, save_d
                 v[f'{k}_ntree'].extend(ntree)
                 v[f'{k}_res'].append(res)
 
-            # _, predicted_ntree = calculate_sequence_ntree(block_ae=block_ae,
-            #                                                           hparam_ntree=hparam_ntree)
-            # predicted_ntree_store.extend(predicted_ntree)
-
-            rw_ntree_store.extend([hparam_ntree] + optimal_ntree[:-1])
+            # rw_ntree_store.extend([hparam_ntree] + optimal_ntree[:-1])
+            rw_ntree_store.extend([hparam_ntree]*h + optimal_ntree[:-h])
             hparam_ntree_store.extend([hparam_ntree] * len(optimal_ntree))
 
         # Full SSM prediction
@@ -354,7 +364,6 @@ def poos_analysis(fl_master, h, h_idx, model_mode, est_mode, results_dir, save_d
 
         hparam_df = [data['hparams_df'].iloc[0, :] for data in data_store]
         hparam_df = pd.concat(hparam_df, axis=1).T
-
         with open(f'{results_dir}/poos_{model_mode}_h{h}_analysis_results.pkl', "wb") as file:
             pickle.dump({'data_df': df, 'hparam_df': hparam_df, 'res_store': res_store}, file)
     elif model_mode == 'rf':
@@ -426,14 +435,14 @@ def poos_xgb_plotting_m(h, results_dir, ssm_modes):
 
     # Plot ntree vs time
     df = data['data_df']
-    plots(df, ['ll', 'll*ln'], plot_name='ll')
-    plots(df, ['llt', 'llt*ln'], plot_name='llt')
-    plots(df, ['lls', 'lls*ln'], plot_name='lls')
-    plots(df, ['llc', 'llc*ln'], plot_name='llc')
+    plots(df, ['ll', 'll*ln',], plot_name='ll')
+    #plots(df, ['llt', 'llt*ln'], plot_name='llt')
+    #plots(df, ['lls', 'lls*ln'], plot_name='lls')
+    #plots(df, ['llc', 'llc*ln'], plot_name='llc')
 
     # Plot last block residual diagnostics
     for k, v in data['res_store'].items():
-        if not 'arima' in k:
+        if not 'arima' in k and not 'rw' in k:
             plt.close()
             v[-1].plot_diagnostics()
             name = k.replace('*', '_')
@@ -441,8 +450,12 @@ def poos_xgb_plotting_m(h, results_dir, ssm_modes):
             plt.savefig(f'{results_dir}/{name}_residual_diagnostics_h{h}.png')
     plt.close()
 
-    with open(f'{results_dir}/poos_h{h}.pkl', 'rb') as handle:
-        data = pickle.load(handle)
+    try:
+        with open(f'{results_dir}/poos_h{h}.pkl', 'rb') as handle:
+            data = pickle.load(handle)
+    except FileNotFoundError:
+        with open(f'{results_dir.rpartition("/")[0]}/poos_h{h}.pkl', 'rb') as handle:
+            data = pickle.load(handle)
     ehat_store = np.array(
         [step['progress']['h_step_ahead']['rmse'] for block in data for step in block['poos_data_store']])
     ehat_store = (ehat_store - ehat_store.min(axis=1)[:, None]) / (
@@ -455,7 +468,7 @@ def poos_xgb_plotting_m(h, results_dir, ssm_modes):
         ehat_df.plot(kind='line', y=y_store, ax=ax, lw=0.5)
     except KeyError:
         y_store = ['2005:1', '2005:2', '2010:1', '2010:2']
-        ehat_df.plot(kind='line', y=y_store, ax=ax, lw=0.7)
+        ehat_df.plot(kind='line', y=y_store, ax=ax, lw=0.9)
 
     ax.set_ylabel('|ehat|')
     ax.set_xlabel('ntrees')
@@ -575,7 +588,7 @@ def poos_processed_data_analysis(results_dir, save_dir_store, h_store, model_ful
         wb.create_sheet(f'h{h}_sorted')
         ws = wb[f'h{h}_sorted']
         df = df.iloc[:,:-2]
-        df = df.sort_values(df.index[0], axis=1)
+        df = df.sort_values(df.index[1], axis=1)
         print_df_to_excel(df,ws)
 
     side_expt = {'plot': ['rw', 'xgba_rh_s42_rw', 'c1', 'c']}

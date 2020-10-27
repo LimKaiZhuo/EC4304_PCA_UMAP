@@ -37,6 +37,12 @@ class SSMBase(BaseEstimator):
         self.mode = mode
 
     def fit(self, X, y=None):
+        # Perform top percentile ceiling
+        self.X = X
+        mode = self.mode
+        if '*f' in self.mode:
+            self.X = np.minimum(X, np.percentile(X, 75))
+            mode = self.mode.partition('*f')[0]
         # Perform transformation if specified by *transformation
         if '*ln' in self.mode:
             self.X = np.log(np.array(X) + 1)
@@ -46,9 +52,7 @@ class SSMBase(BaseEstimator):
             self.X = transformer.fit_transform(y=X)
             self.transformer = transformer
             mode = self.mode.partition('*bc')[0]
-        else:
-            self.X = X
-            mode = self.mode
+
         try:
             if mode == 'll':
                 # Local Level
@@ -78,6 +82,10 @@ class SSMBase(BaseEstimator):
                                       max_p=5, max_q=5, max_P=5, max_Q=5, seasonal=True,
                                       stepwise=True, suppress_warnings=True, D=10, max_D=10,
                                       error_action='ignore')
+            elif mode == 'rw1':
+                # For RW model
+                self.res_ = None
+                self.converged = False
         except np.linalg.LinAlgError:
             # Some kalman filter error ==> Use random walk
             print(f'Convergence failed for {mode}')
@@ -86,7 +94,8 @@ class SSMBase(BaseEstimator):
         try:
             self.converged = self.res_.mle_retvals['converged']
         except AttributeError:
-            self.converged = True  # auto ARIMA from pmdarima should always converge
+            if mode == 'arima':
+                self.converged = True  # auto ARIMA from pmdarima should always converge
         return self
 
     def predict(self, X=None):
@@ -94,6 +103,7 @@ class SSMBase(BaseEstimator):
         # Check is fit had been called
         #check_is_fitted(self)
         if not self.converged:
+            # Either convergence failed or it is RW model
             # print('MLE convergence failed. Returning random walk forecast.')
             return self.X[-1]
         if 'lla' in self.mode:
@@ -110,5 +120,3 @@ class SSMBase(BaseEstimator):
         else:
             return ret
 
-    def score(self):
-        pass

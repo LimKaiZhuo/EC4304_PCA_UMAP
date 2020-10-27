@@ -15,26 +15,27 @@ def selector(case, **kwargs):
         ehats. Performs online learning of optimal ntrees. Save results in another pickle object which is a dict of 
         results.
         '''
-        excel_dir = './excel/dataset_0720/INDPRO_data_loader.xlsx'
+        excel_dir = './excel/dataset_0720/CPIA1_data_loader.xlsx'
         output = read_excel_dataloader(excel_dir=excel_dir)
         fl_master = Fl_master(x=output[0], features_names=output[1],
                               yo=output[2], labels_names=output[3],
                               y=output[4], y_names=output[5],
                               time_stamp=output[6])
         first_est_date = '2005:1'
-        id = create_id_dict(var_name='IND',
-                            h=[24],
-                            est='rh',
+        id = create_id_dict(var_name='CPIA1',
+                            h=[1,3, 6, 12, 24],
+                            est='rfcv',
                             model='xgb',
-                            model_name='xgbahp',
+                            model_name='xgba',
                             expt='expt1',
                             combined_name=None,
                             seed=42, )
-        h_store = [24]
-        h_idx_store = [4]
+        h_store = [1,3, 6, 12, 24]
+        h_idx_store = [0,1,2,3,4]
+        results_dir = create_results_directory(f'{id["results_dir"]}/ssm')
         for h, h_idx in zip(h_store, h_idx_store):
             poos_analysis(fl_master=fl_master, h=h, h_idx=h_idx, model_mode=id['model'], est_mode=id['est'],
-                          results_dir=id['results_dir'],
+                          results_dir=results_dir,
                           first_est_date=first_est_date,
                           save_dir=f'{id["results_dir"]}/poos_h{h}.pkl')
     elif case == 3:
@@ -46,32 +47,43 @@ def selector(case, **kwargs):
             levels = kwargs['levels']
             combi = None
         except KeyError:
-            id = create_id_dict(var_name='IND',
+            id = create_id_dict(var_name='CPIA1',
                                 h=[1, 3, 6, 12, 24],
-                                est='rh',
+                                est='rfcv',
                                 model='xgb',
-                                model_name='xgbahp',
+                                model_name='xgba',
                                 expt='expt1',
                                 combined_name=None,
-                                seed=42,
-                                results_dir='./results/expt1/model_combination_CPIA1')
+                                seed=42, )
+            ssm_subdir = 'ssm/'
             levels = False
             combi = [['rw', 'll*ln'],
+                     ['rw', 'hparam'],
+                     ['rw', 'hparam', 'll*ln'],]
+            '''
+            [['rw', 'll*ln'],
                      ['rw', 'llt*ln'],
-                     ['rw', 'll*ln', 'llt*ln'], ]
+                     ['rw', 'll*ln', 'llt*ln'],
+                     ['rw', 'll']]
+            '''
         if levels:
             levels = '_levels'
         else:
             levels = ''
+        if ssm_subdir:
+            results_dir = id['results_dir'] + f'/{ssm_subdir}'
+        else:
+            results_dir = id['results_dir']
+
         first_est_date = '2005:1'
         est_dates = ['2004:12']
 
         poos_processed_data_analysis(
-            save_dir_store=[f'{id["results_dir"]}/poos_{id["model"]}_h1_analysis_results{levels}.pkl',
-                            f'{id["results_dir"]}/poos_{id["model"]}_h3_analysis_results{levels}.pkl',
-                            f'{id["results_dir"]}/poos_{id["model"]}_h6_analysis_results{levels}.pkl',
-                            f'{id["results_dir"]}/poos_{id["model"]}_h12_analysis_results{levels}.pkl',
-                            f'{id["results_dir"]}/poos_{id["model"]}_h24_analysis_results{levels}.pkl',
+            save_dir_store=[f'{id["results_dir"]}/{ssm_subdir}poos_{id["model"]}_h1_analysis_results{levels}.pkl',
+                            f'{id["results_dir"]}/{ssm_subdir}poos_{id["model"]}_h3_analysis_results{levels}.pkl',
+                            f'{id["results_dir"]}/{ssm_subdir}poos_{id["model"]}_h6_analysis_results{levels}.pkl',
+                            f'{id["results_dir"]}/{ssm_subdir}poos_{id["model"]}_h12_analysis_results{levels}.pkl',
+                            f'{id["results_dir"]}/{ssm_subdir}poos_{id["model"]}_h24_analysis_results{levels}.pkl',
                             ],
             h_store=['1',
                      '3',
@@ -79,7 +91,7 @@ def selector(case, **kwargs):
                      '12',
                      '24',
                      ],
-            results_dir=id['results_dir'],
+            results_dir=results_dir,
             model_full_name=id['model_full_name'] + levels, model=id['model'],
             nber_excel_dir='./excel/NBER_062020.xlsx',
             est_dates=est_dates, first_est_date=first_est_date,
@@ -88,7 +100,7 @@ def selector(case, **kwargs):
         # Plot information about m iteration errors for xgb. Uses the post processed of poos_h{}.pkl.
         h_store = [1, 3, 6, 12, 24]
         h_idx_store = [0, 1, 2, 3, 4]
-        results_dir = './results/expt1/poos_CPIA1_xgba_rh_s42'
+        results_dir = './results/expt1/poos_IND_xgba_rh_s42/ssm'
         for h, h_idx in zip(h_store, h_idx_store):
             poos_xgb_plotting_m(h=h, results_dir=results_dir, ssm_modes=['ll*ln'])
     elif case == 3.3:
@@ -263,96 +275,7 @@ def selector(case, **kwargs):
         model_mode = 'pca'
         results_dir = create_results_directory(f'./results/expt1/poos_{var_name}_{model_mode}')
         run_basic(model_mode=model_mode, results_dir=results_dir, fl_master=fl_master)
-    elif case == 4:
-        # Run poos experiment for ar4 or pca
-        var_name = kwargs['var_name']
-        excel_dir = kwargs['excel_dir']
-        results_dir = create_results_directory('./results/expt1/{}'.format(var_name))
-        output = read_excel_dataloader(excel_dir=excel_dir)
-        fl_master = Fl_master(x=output[0], features_names=output[1],
-                              yo=output[2], labels_names=output[3],
-                              y=output[4], y_names=output[5],
-                              time_stamp=output[6])
-        fl = Fl_ar(val_split=None, x=None, yo=None, y=None,
-                   time_stamp=None, time_idx=None,
-                   features_names=fl_master.features_names, labels_names=fl_master.labels_names,
-                   y_names=fl_master.y_names)
 
-        first_est_date = '2005:1'
-        est_dates = ['2004:12']
-
-        model_mode = 'ar'
-        poos_experiment(fl_master=fl_master, fl=fl, est_dates=est_dates, z_type=1, h=1, h_idx=0,
-                        m_max=3, p_max=12, model_mode=model_mode, save_dir=results_dir, first_est_date=first_est_date,
-                        )
-        poos_experiment(fl_master=fl_master, fl=fl, est_dates=est_dates, z_type=1, h=3, h_idx=1,
-                        m_max=3, p_max=12, model_mode=model_mode, save_dir=results_dir, first_est_date=first_est_date,
-                        )
-        poos_experiment(fl_master=fl_master, fl=fl, est_dates=est_dates, z_type=1, h=6, h_idx=2,
-                        m_max=3, p_max=12, model_mode=model_mode, save_dir=results_dir, first_est_date=first_est_date,
-                        )
-        poos_experiment(fl_master=fl_master, fl=fl, est_dates=est_dates, z_type=1, h=12, h_idx=3,
-                        m_max=3, p_max=12, model_mode=model_mode, save_dir=results_dir, first_est_date=first_est_date,
-                        )
-        poos_experiment(fl_master=fl_master, fl=fl, est_dates=est_dates, z_type=1, h=24, h_idx=4,
-                        m_max=3, p_max=12, model_mode=model_mode, save_dir=results_dir, first_est_date=first_est_date,
-                        )
-
-        poos_processed_data_analysis(
-            save_dir_store=[f'{results_dir}/poos_{model_mode}_h1_analysis_results.pkl',
-                            f'{results_dir}/poos_{model_mode}_h3_analysis_results.pkl',
-                            f'{results_dir}/poos_{model_mode}_h6_analysis_results.pkl',
-                            f'{results_dir}/poos_{model_mode}_h12_analysis_results.pkl',
-                            f'{results_dir}/poos_{model_mode}_h24_analysis_results.pkl',
-                            ],
-            h_store=['1',
-                     '3',
-                     '6',
-                     '12',
-                     '24',
-                     ],
-            results_dir=results_dir, model_full_name=model_mode, model=model_mode,
-            nber_excel_dir='./excel/NBER_062020.xlsx',
-            est_dates=est_dates, first_est_date=first_est_date)
-
-        model_mode = 'pca'
-        results_dir = create_results_directory('./results/expt1/{}'.format(var_name))
-        fl = Fl_pca(val_split=None, x=None, yo=None, y=None,
-                    time_stamp=None, time_idx=None,
-                    features_names=fl_master.features_names, labels_names=fl_master.labels_names,
-                    y_names=fl_master.y_names)
-        poos_experiment(fl_master=fl_master, fl=fl, est_dates=est_dates, z_type=1, h=1, h_idx=0,
-                        m_max=3, p_max=12, model_mode=model_mode, save_dir=results_dir, first_est_date=first_est_date,
-                        )
-        poos_experiment(fl_master=fl_master, fl=fl, est_dates=est_dates, z_type=1, h=3, h_idx=1,
-                        m_max=3, p_max=12, model_mode=model_mode, save_dir=results_dir, first_est_date=first_est_date,
-                        )
-        poos_experiment(fl_master=fl_master, fl=fl, est_dates=est_dates, z_type=1, h=6, h_idx=2,
-                        m_max=3, p_max=12, model_mode=model_mode, save_dir=results_dir, first_est_date=first_est_date,
-                        )
-        poos_experiment(fl_master=fl_master, fl=fl, est_dates=est_dates, z_type=1, h=12, h_idx=3,
-                        m_max=3, p_max=12, model_mode=model_mode, save_dir=results_dir, first_est_date=first_est_date,
-                        )
-        poos_experiment(fl_master=fl_master, fl=fl, est_dates=est_dates, z_type=1, h=24, h_idx=4,
-                        m_max=3, p_max=12, model_mode=model_mode, save_dir=results_dir, first_est_date=first_est_date,
-                        )
-
-        poos_processed_data_analysis(
-            save_dir_store=[f'{results_dir}/poos_{model_mode}_h1_analysis_results.pkl',
-                            f'{results_dir}/poos_{model_mode}_h3_analysis_results.pkl',
-                            f'{results_dir}/poos_{model_mode}_h6_analysis_results.pkl',
-                            f'{results_dir}/poos_{model_mode}_h12_analysis_results.pkl',
-                            f'{results_dir}/poos_{model_mode}_h24_analysis_results.pkl',
-                            ],
-            h_store=['1',
-                     '3',
-                     '6',
-                     '12',
-                     '24',
-                     ],
-            results_dir=results_dir, model_full_name=model_mode, model=model_mode,
-            nber_excel_dir='./excel/NBER_062020.xlsx',
-            est_dates=est_dates, first_est_date=first_est_date)
     elif case == 5:
         # Forecast evaluation DM
         h_store = [1, 3, 6, 12, 24]
@@ -608,7 +531,7 @@ def selector(case, **kwargs):
         other_xgb_store = [{h: f'{id_["results_dir"]}/poos_h{h}.pkl' for h in h_store} for id_ in [id2, id3, id4]]
         poos_shap(fl_master=fl_master, fl=fl_xgb,
                   xgb_store=[f'{id1["results_dir"]}/poos_h{h}.pkl' for h in h_store],
-                  other_xgb_store=other_xgb_store,
+                  other_xgb_store=None,
                   first_est_date=first_est_date,
                   results_dir=results_dir,
                   feature_info_dir=feature_info_dir)
@@ -623,4 +546,6 @@ if __name__ == '__main__':
     #                                                  combined_name='c1',
     #                                                  expt='expt1',
     #                                                  est='rh'))
-    selector(case=3, excel_dir='./excel/dataset_0720/INDPRO_data_loader.xlsx', var_name='poos_IND_ar')
+    selector(case=2, excel_dir='./excel/dataset_0720/INDPRO_data_loader.xlsx', var_name='poos_IND_ar')
+    selector(case=3)
+    #selector(case=3.2)
